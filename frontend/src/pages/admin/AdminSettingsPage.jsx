@@ -6,6 +6,7 @@ import {
   getAdminUiPrefs,
   setAdminUiPrefs
 } from "../../services/adminUiPrefs";
+import { fetchSupabaseData } from "../../services/supabaseData";
 
 const initialMailSettings = {
   provider: "node",
@@ -52,6 +53,14 @@ export default function AdminSettingsPage() {
   const [savingUi, setSavingUi] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [sendingBulk, setSendingBulk] = useState(false);
+  const [supabaseBridge, setSupabaseBridge] = useState({
+    table: "todos",
+    select: "id,name",
+    limit: "10"
+  });
+  const [supabaseBridgeLoading, setSupabaseBridgeLoading] = useState(false);
+  const [supabaseBridgeResult, setSupabaseBridgeResult] = useState(null);
+  const [supabaseBridgeError, setSupabaseBridgeError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -221,6 +230,28 @@ export default function AdminSettingsPage() {
     setError("");
   };
 
+  const fetchSupabaseBridgeData = async (event) => {
+    event.preventDefault();
+    setSupabaseBridgeLoading(true);
+    setSupabaseBridgeError("");
+    setSupabaseBridgeResult(null);
+
+    try {
+      const result = await fetchSupabaseData({
+        table: supabaseBridge.table.trim() || "todos",
+        select: supabaseBridge.select.trim() || "*",
+        limit: Number(supabaseBridge.limit) || 10
+      });
+      setSupabaseBridgeResult(result);
+    } catch (requestError) {
+      setSupabaseBridgeError(
+        requestError?.response?.data?.message || requestError?.message || "Failed to load Supabase data"
+      );
+    } finally {
+      setSupabaseBridgeLoading(false);
+    }
+  };
+
   return (
     <section className="space-y-5">
       <GlassCard>
@@ -259,6 +290,65 @@ export default function AdminSettingsPage() {
             </button>
           </div>
         </form>
+      </GlassCard>
+
+      <GlassCard>
+        <h3 className="font-display text-lg text-white">Supabase API Bridge</h3>
+        <p className="mt-2 text-sm text-soft">
+          Fetch data from the backend Supabase bridge. The frontend calls the backend API, and the
+          backend queries Supabase for the requested table.
+        </p>
+
+        <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={fetchSupabaseBridgeData}>
+          <input
+            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+            placeholder="Table name"
+            value={supabaseBridge.table}
+            onChange={(event) =>
+              setSupabaseBridge((prev) => ({ ...prev, table: event.target.value }))
+            }
+            required
+          />
+          <input
+            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+            placeholder="Select fields"
+            value={supabaseBridge.select}
+            onChange={(event) =>
+              setSupabaseBridge((prev) => ({ ...prev, select: event.target.value }))
+            }
+          />
+          <input
+            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+            placeholder="Limit"
+            type="number"
+            min="1"
+            value={supabaseBridge.limit}
+            onChange={(event) =>
+              setSupabaseBridge((prev) => ({ ...prev, limit: event.target.value }))
+            }
+          />
+          <button
+            className="rounded-xl bg-gradient-to-r from-violetBrand-500 to-brand-500 px-4 py-3 text-sm font-semibold text-white"
+            type="submit"
+            disabled={supabaseBridgeLoading}
+          >
+            {supabaseBridgeLoading ? "Loading..." : "Load Supabase Data"}
+          </button>
+        </form>
+
+        {supabaseBridgeError ? (
+          <p className="mt-3 text-sm text-red-300">{supabaseBridgeError}</p>
+        ) : null}
+
+        {supabaseBridgeResult ? (
+          <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <p className="text-sm text-soft">Status: {supabaseBridgeResult.ok ? "Success" : "Failed"}</p>
+            <p className="mt-2 text-sm text-soft">Table: {supabaseBridgeResult.table || "n/a"}</p>
+            <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs text-slate-200">
+              {JSON.stringify(supabaseBridgeResult.data || [], null, 2)}
+            </pre>
+          </div>
+        ) : null}
       </GlassCard>
 
       <GlassCard>
