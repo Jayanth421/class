@@ -27,8 +27,8 @@ function getStorageUploadNetworkHint(uploadUrl) {
   const origin = typeof window !== "undefined" ? String(window.location.origin || "") : "";
 
   if (/amazonaws\.com/i.test(url)) {
-    const originHint = origin ? `Add ${origin} to your S3 bucket CORS AllowedOrigins (and allow PUT).` : "";
-    return `Storage upload request was blocked (usually S3 CORS). ${originHint} Or set backend S3_UPLOAD_MODE=proxy to upload via the backend API.`;
+    const originHint = origin ? `Add ${origin} to your storage bucket CORS AllowedOrigins (and allow PUT).` : "";
+    return `Storage upload request was blocked by CORS. ${originHint} Or set backend STORAGE_PROVIDER=supabase and SUPABASE_UPLOAD_MODE=proxy to upload via the backend API.`;
   }
 
   return "Storage upload request failed to reach the server. Check backend URL and network connectivity.";
@@ -327,19 +327,26 @@ export default function StudentPresentationsPage() {
                       <button
                         type="button"
                         onClick={() => startEdit(item)}
-                        className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
+                        className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-xs text-black hover:bg-white/20"
                       >
                         Edit
                       </button>
-                      <a
-                        href={item.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
+                      <button
+                        type="button"
+                        className="rounded-lg border border-white/20 bg-black/100 px-2 py-1 text-xs text-black/100 hover:bg-white/20"
+                        onClick={async () => {
+                          try {
+                            const resp = await api.get('/storage/file-url', { params: { uploadId: item.id } });
+                            const url = resp.data?.url;
+                            if (url) window.open(url, '_blank');
+                          } catch (err) {
+                            setError(err?.response?.data?.message || 'Failed to get download URL');
+                          }
+                        }}
                       >
                         Download
-                      </a>
-                      <label className="cursor-pointer rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20">
+                      </button>
+                      <label className="cursor-pointer rounded-lg border border-white/20 bg-black/100 px-2 py-1 text-xs text-black/100 hover:bg-white/20">
                         Replace
                         <input
                           type="file"

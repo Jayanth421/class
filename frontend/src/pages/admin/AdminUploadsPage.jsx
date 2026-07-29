@@ -311,29 +311,51 @@ export default function AdminUploadsPage() {
                       <div className="flex flex-wrap gap-2">
                         {item.fileUrl ? (
                           <>
-                            <a
+                            <button
                               className="rounded-lg bg-white/15 px-3 py-1 text-xs text-white hover:bg-white/25"
-                              href={item.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const resp = await api.get('/storage/file-url', { params: { uploadId: item.id } });
+                                  const url = resp.data?.url;
+                                  if (url) window.open(url, '_blank');
+                                } catch (err) {
+                                  setError(err?.response?.data?.message || 'Failed to get download URL');
+                                }
+                              }}
                             >
                               Download
-                            </a>
+                            </button>
                             <button
                               type="button"
-                              onClick={() => setPreviewUrl(item.fileUrl)}
+                              onClick={async () => {
+                                try {
+                                  const resp = await api.get('/storage/file-url', { params: { uploadId: item.id } });
+                                  const url = resp.data?.url;
+                                  if (url) setPreviewUrl(url);
+                                } catch (err) {
+                                  setError(err?.response?.data?.message || 'Failed to get preview URL');
+                                }
+                              }}
                               className="rounded-lg bg-brand-500/80 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-500"
                             >
                               Preview
                             </button>
-                            <a
+                            <button
                               className="rounded-lg bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/20"
-                              href={item.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const resp = await api.get('/storage/file-url', { params: { uploadId: item.id } });
+                                  const url = resp.data?.url;
+                                  if (url) window.open(url, '_blank');
+                                } catch (err) {
+                                  setError(err?.response?.data?.message || 'Failed to open file');
+                                }
+                              }}
                             >
                               Open in new tab
-                            </a>
+                            </button>
                           </>
                         ) : (
                           <span className="text-xs text-soft">No file</span>
