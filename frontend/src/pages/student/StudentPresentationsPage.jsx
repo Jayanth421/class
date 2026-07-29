@@ -94,6 +94,27 @@ export default function StudentPresentationsPage() {
     setEditState({ id: "", title: "", description: "", subjectId: "" });
   };
 
+  const [activeMenuId, setActiveMenuId] = useState("");
+
+  const fetchSignedUrl = async (uploadId) => {
+    const response = await api.get("/storage/file-url", { params: { uploadId } });
+    const url = response.data?.url;
+    if (!url) {
+      throw new Error("Failed to get the file URL from the server.");
+    }
+    return url;
+  };
+
+  const openRemoteFile = async (uploadId) => {
+    const url = await fetchSignedUrl(uploadId);
+    window.open(url, "_blank");
+  };
+
+  const viewRemoteFile = async (uploadId) => {
+    const url = await fetchSignedUrl(uploadId);
+    window.open(url, "_blank");
+  };
+
   const saveEdit = async (event) => {
     event.preventDefault();
     if (!editState.id) return;
@@ -323,51 +344,87 @@ export default function StudentPresentationsPage() {
                     {item.createdAt ? new Date(item.createdAt).toLocaleString() : "-"}
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="relative inline-block text-left">
                       <button
                         type="button"
-                        onClick={() => startEdit(item)}
-                        className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-xs text-black hover:bg-white/20"
+                        onClick={() => setActiveMenuId(activeMenuId === item.id ? "" : item.id)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-sm text-white transition hover:bg-white/15"
+                        aria-haspopup="true"
+                        aria-expanded={activeMenuId === item.id}
                       >
-                        Edit
+                        ⋯
                       </button>
-                      <button
-                        type="button"
-                        className="rounded-lg border border-white/20 bg-black/100 px-2 py-1 text-xs text-black/100 hover:bg-white/20"
-                        onClick={async () => {
-                          try {
-                            const resp = await api.get('/storage/file-url', { params: { uploadId: item.id } });
-                            const url = resp.data?.url;
-                            if (url) window.open(url, '_blank');
-                          } catch (err) {
-                            setError(err?.response?.data?.message || 'Failed to get download URL');
-                          }
-                        }}
-                      >
-                        Download
-                      </button>
-                      <label className="cursor-pointer rounded-lg border border-white/20 bg-black/100 px-2 py-1 text-xs text-black/100 hover:bg-white/20">
-                        Replace
-                        <input
-                          type="file"
-                          accept=".ppt,.pptx,.pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/pdf"
-                          className="hidden"
-                          disabled={processingId === item.id}
-                          onChange={(event) => {
-                            const selectedFile = event.target.files?.[0] || null;
-                            replacePresentationFile(item, selectedFile);
-                            event.target.value = "";
-                          }}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        disabled={processingId === item.id}
-                        onClick={() => deletePresentation(item.id)}
-                        className="rounded-lg border border-red-400/50 bg-red-400/20 px-2 py-1 text-xs text-red-100 hover:bg-red-400/30 disabled:opacity-70"
-                      >
-                        {processingId === item.id ? "Working..." : "Delete"}
-                      </button>
+                      {activeMenuId === item.id ? (
+                        <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/95 shadow-xl">
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-left text-xs text-white hover:bg-white/10"
+                            onClick={() => {
+                              startEdit(item);
+                              setActiveMenuId("");
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-left text-xs text-white hover:bg-white/10"
+                            onClick={async () => {
+                              try {
+                                await openRemoteFile(item.id);
+                              } catch (err) {
+                                setError(err?.response?.data?.message || err.message || 'Failed to open file');
+                              } finally {
+                                setActiveMenuId("");
+                              }
+                            }}
+                          >
+                            Download
+                          </button>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-left text-xs text-white hover:bg-white/10"
+                            onClick={async () => {
+                              try {
+                                await viewRemoteFile(item.id);
+                              } catch (err) {
+                                setError(err?.response?.data?.message || err.message || 'Failed to view file');
+                              } finally {
+                                setActiveMenuId("");
+                              }
+                            }}
+                          >
+                            View
+                          </button>
+                          <label
+                            className="block w-full cursor-pointer px-3 py-2 text-left text-xs text-white hover:bg-white/10"
+                          >
+                            Replace
+                            <input
+                              type="file"
+                              accept=".ppt,.pptx,.pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/pdf"
+                              className="hidden"
+                              disabled={processingId === item.id}
+                              onChange={(event) => {
+                                const selectedFile = event.target.files?.[0] || null;
+                                replacePresentationFile(item, selectedFile);
+                                event.target.value = "";
+                                setActiveMenuId("");
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-left text-xs text-red-300 hover:bg-red-500/10"
+                            onClick={() => {
+                              deletePresentation(item.id);
+                              setActiveMenuId("");
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
