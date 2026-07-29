@@ -95,6 +95,10 @@ export default function StudentPresentationsPage() {
   };
 
   const [activeMenuItem, setActiveMenuItem] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  const buildOfficeViewerUrl = (fileUrl) =>
+    `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
 
   const fetchSignedUrl = async (uploadId) => {
     const response = await api.get("/storage/file-url", { params: { uploadId } });
@@ -112,7 +116,7 @@ export default function StudentPresentationsPage() {
 
   const viewRemoteFile = async (uploadId) => {
     const url = await fetchSignedUrl(uploadId);
-    window.open(url, "_blank");
+    setPreviewUrl(url);
   };
 
   const closeActionMenu = () => {
@@ -372,18 +376,18 @@ export default function StudentPresentationsPage() {
           onClick={closeActionMenu}
         >
           <div
-            className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900/95 p-4 shadow-2xl"
+            className="w-full max-w-sm rounded-3xl border border-black/100 bg-black/100 p-4 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-white">Actions</p>
+                <p className="rounded-full text-sm font-semibold text-black bg-white ">Actions</p>
                 <p className="text-xs text-soft">{activeMenuItem.title || activeMenuItem.fileName}</p>
               </div>
               <button
                 type="button"
                 onClick={closeActionMenu}
-                className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-white hover:bg-white/10"
+                className="rounded-full border border-white/100 bg-white/5 px-2 py-1 text-xs text-black/100 hover:bg-black/10"
               >
                 Close
               </button>
@@ -391,7 +395,7 @@ export default function StudentPresentationsPage() {
             <div className="space-y-2">
               <button
                 type="button"
-                className="w-full rounded-2xl bg-white/10 px-4 py-3 text-left text-sm text-white hover:bg-white/15"
+                className="w-full rounded-2xl  border border-black/10 bg-white/10 px-4 py-3 text-left text-sm text-white hover:bg-white/15"
                 onClick={() => {
                   startEdit(activeMenuItem);
                   closeActionMenu();
@@ -429,7 +433,7 @@ export default function StudentPresentationsPage() {
               >
                 View
               </button>
-              <label className="block cursor-pointer rounded-2xl bg-white/10 px-4 py-3 text-sm text-white hover:bg-white/15">
+              <label className="block cursor-pointer rounded-2xl bg-green px-4 py-3 text-sm text-black hover:bg-white/15">
                 Replace
                 <input
                   type="file"
@@ -454,6 +458,38 @@ export default function StudentPresentationsPage() {
               >
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {previewUrl ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/80 p-4"
+          onClick={() => setPreviewUrl("")}
+        >
+          <div className="w-full max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-slate-900/95 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 bg-slate-950/90 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-white">Preview</p>
+                <p className="text-xs text-soft">{activeMenuItem?.title || activeMenuItem?.fileName || "Presentation"}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewUrl("")}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white hover:bg-white/10"
+              >
+                Close
+              </button>
+            </div>
+            <div className="h-[80vh] bg-white">
+              <iframe
+                title="File Preview"
+                src={buildOfficeViewerUrl(previewUrl)}
+                className="h-full w-full"
+              />
             </div>
           </div>
         </div>
