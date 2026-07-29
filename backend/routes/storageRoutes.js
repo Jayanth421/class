@@ -2,15 +2,15 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const { pipeline } = require("stream/promises");
-const { PassThrough, Transform } = require("stream");
+const { Transform } = require("stream");
 const { verifyUploadToken } = require("../config/jwt");
 const ApiError = require("../utils/apiError");
-const { uploadObjectStream } = require("../services/s3Service");
 const {
   getLocalUploadDir,
-  getS3UploadMode,
+  getSupabaseUploadMode,
   getStorageProvider,
-  safeResolveLocalPath
+  safeResolveLocalPath,
+  uploadObjectStream
 } = require("../services/storageService");
 
 function getUploadToken(req) {
@@ -56,39 +56,16 @@ async function writeRequestToFile(req, filePath, maxBytes) {
   }
 }
 
-async function uploadRequestToS3(req, { key, contentType, maxBytes }) {
-  const passThrough = new PassThrough();
-
-  const uploadPromise = uploadObjectStream({
-    key,
-    body: passThrough,
-    contentType
-  }).catch((error) => {
-    passThrough.destroy(error);
-    throw error;
-  });
-
-  try {
-    await pipeline(req, createByteLimitTransform(maxBytes), passThrough);
-    await uploadPromise;
-  } catch (error) {
-    passThrough.destroy(error);
-    try {
-      await uploadPromise;
-    } catch (_uploadError) {
-      // ignore secondary upload errors
-    }
-    throw error;
-  }
-}
+const verifyJWT = require("../middlewares/verifyJWT");
+const { createPresignedDownloadUrl, listObjects } = require("../services/storageService");
 
 const router = express.Router();
 
 router.put("/upload", async (req, res, next) => {
   try {
     const provider = getStorageProvider();
-    const s3UploadMode = getS3UploadMode();
-    const uploadViaBackend = provider === "local" || (provider === "s3" && s3UploadMode === "proxy");
+    const supabaseUploadMode = getSupabaseUploadMode();
+    const uploadViaBackend = provider === "local" || (provider === "supabase" && supabaseUploadMode === "proxy");
 
     if (!uploadViaBackend) {
       throw new ApiError(404, "Not found");
@@ -131,10 +108,50 @@ router.put("/upload", async (req, res, next) => {
       const filePath = safeResolveLocalPath(uploadDir, key);
       await writeRequestToFile(req, filePath, maxBytes);
     } else {
-      await uploadRequestToS3(req, { key, contentType: normalizedRequestType, maxBytes });
+      await uploadObjectStream({ key, body: req, contentType: normalizedRequestType, maxBytes });
     }
 
     res.status(200).json({ message: "Uploaded" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Return a signed URL for a stored object. Requires authentication.
+router.get('/url', verifyJWT, async (req, res, next) => {
+  try {
+    const key = String(req.query.key || '').trim();
+    if (!key) return res.status(400).json({ ok: false, message: 'key query param is required' });
+
+    const expiresIn = Number(req.query.expires || 3600);
+    const url = await createPresignedDownloadUrl({ key, expiresIn });
+    res.status(200).json({ ok: true, url });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// List objects under a prefix. Requires authentication.
+router.get('/list', verifyJWT, async (req, res, next) => {
+  try {
+    const prefix = String(req.query.prefix || '').trim();
+    const limit = Number(req.query.limit || 100);
+    const offset = Number(req.query.offset || 0);
+
+    const items = await listObjects({ prefix, limit, offset });
+
+    // Normalize to { key, name, isDirectory }
+    const normalized = (items || []).map((it) => {
+      const name = it.name || it; // supabase returns objects with name property
+      const key = prefix ? `${prefix.replace(/\/+$/, '')}/${name}` : name;
+      return {
+        key,
+        name,
+        isDirectory: !!it?.is_directory || !!it?.isDirectory || false
+      };
+    });
+
+    res.status(200).json({ ok: true, files: normalized });
   } catch (error) {
     next(error);
   }

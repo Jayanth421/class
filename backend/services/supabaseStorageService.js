@@ -128,10 +128,24 @@ async function uploadObjectStream({ key, body, contentType }) {
   return { key };
 }
 
+async function listObjects({ prefix = "", limit = 100, offset = 0 }) {
+  const bucket = getSupabaseBucket();
+  const client = getSupabaseClient();
+  const { data, error } = await client.storage.from(bucket).list(normalizeStorageKey(prefix), {
+    limit,
+    offset
+  });
+  if (error) {
+    throw error;
+  }
+  return data || [];
+}
+
 module.exports = {
   buildPublicFileUrl,
   createPresignedDownloadUrl,
   createPresignedUploadUrl,
   doesObjectExist,
-  uploadObjectStream
+  uploadObjectStream,
+  listObjects
 };
