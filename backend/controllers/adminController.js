@@ -11,6 +11,7 @@ const OtpCode = require("../mongoModels/OtpCode");
 const RefreshToken = require("../mongoModels/RefreshToken");
 const SmartboardSession = require("../mongoModels/SmartboardSession");
 const SmtpSetting = require("../mongoModels/SmtpSetting");
+const SmartboardSetting = require("../mongoModels/SmartboardSetting");
 const Subject = require("../mongoModels/Subject");
 const Upload = require("../mongoModels/Upload");
 const User = require("../mongoModels/User");
@@ -51,7 +52,8 @@ function getEnvMailSettings() {
     timeoutSeconds: Number(process.env.SMTP_TIMEOUT_SECONDS || 20),
     user: process.env.SMTP_USER || "",
     pass: process.env.SMTP_PASS || "",
-    from: process.env.SMTP_FROM || process.env.SMTP_USER || ""
+    apiKey: String(process.env.RESEND_API_KEY || "").trim(),
+    from: process.env.RESEND_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || ""
   };
 }
 
@@ -69,14 +71,186 @@ async function getActiveMailSettings() {
     timeoutSeconds: Number(saved.timeoutSeconds || envSettings.timeoutSeconds || 20),
     user: saved.user || envSettings.user,
     pass: saved.pass || envSettings.pass,
+    apiKey: saved.apiKey || envSettings.apiKey,
     from: saved.from || envSettings.from
   };
 }
 
-function sanitizeMailSettingsForResponse(settings) {
+function sanitizeMailSettingsForResponse(settings = {}) {
   return {
-    ...settings,
-    pass: settings.pass ? "********" : ""
+    provider: settings.provider || "node",
+    host: settings.host || "",
+    port: Number(settings.port || 587),
+    secure: Boolean(settings.secure),
+    starttls: settings.starttls === undefined ? true : Boolean(settings.starttls),
+    timeoutSeconds: Number(settings.timeoutSeconds || 20),
+    user: settings.user || "",
+    pass: settings.pass ? "********" : "",
+    apiKey: settings.apiKey ? "********" : "",
+    from: settings.from || ""
+  };
+}
+
+function getEnvSmartboardSettings() {
+  return {
+    accessUser: String(process.env.SMARTBOARD_ACCESS_USER || "").trim(),
+    accessKeyPlain: String(process.env.SMARTBOARD_ACCESS_KEY || "").trim(),
+    defaultFacultyEmail: String(process.env.SMARTBOARD_DEFAULT_FACULTY_EMAIL || "").trim(),
+    classIds: [],
+    classNames: []
+  };
+}
+
+async function getActiveSmartboardSettings() {
+  const envSettings = getEnvSmartboardSettings();
+  const saved = await SmartboardSetting.findOne({ key: "default" }).lean().exec();
+  if (!saved) return envSettings;
+
+  return {
+    accessUser: saved.accessUser || envSettings.accessUser,
+    accessKeyHash: saved.accessKeyHash || "",
+    accessKeyPlain: envSettings.accessKeyPlain,
+    defaultFacultyEmail: saved.defaultFacultyEmail || envSettings.defaultFacultyEmail,
+    classIds: Array.isArray(saved.classIds) ? saved.classIds.map((c) => String(c)) : [],
+    classNames: Array.isArray(saved.classNames) ? saved.classNames : []
+  };
+}
+
+function sanitizeSmartboardSettingsForResponse(settings) {
+  return {
+    accessUser: settings.accessUser || "",
+    accessKey: settings.accessKeyHash ? "********" : "",
+    defaultFacultyEmail: settings.defaultFacultyEmail || "",
+    classIds: settings.classIds || [],
+    classNames: settings.classNames || []
+  };
+}
+
+// ===== Smartboard CRUD for multiple devices =====
+const listSmartboards = asyncHandler(async (req, res) => {
+  const rows = await SmartboardSetting.find({}).sort({ createdAt: -1 }).lean().exec();
+  const smartboards = rows.map((r) => ({
+    id: String(r._id),
+    key: r.key,
+    accessUser: r.accessUser || "",
+    accessKey: r.accessKeyHash ? "********" : "",
+    defaultFacultyEmail: r.defaultFacultyEmail || "",
+    classIds: Array.isArray(r.classIds) ? r.classIds.map((c) => String(c)) : [],
+    classNames: Array.isArray(r.classNames) ? r.classNames : [],
+    updatedBy: r.updatedBy ? String(r.updatedBy) : null,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt
+  }));
+
+  res.status(200).json({ smartboards });
+});
+
+const createSmartboard = asyncHandler(async (req, res) => {
+  const { key, accessUser, accessKey, defaultFacultyEmail, classIds } = req.body;
+  if (!key) throw new ApiError(400, "key (identifier) is required");
+  const normalizedKey = String(key).trim();
+
+  const validated = await validateSmartboardSettingsInput({
+    accessUser,
+    accessKey,
+    defaultFacultyEmail,
+    classIds
+  });
+
+  const payload = {
+    key: normalizedKey,
+    accessUser: validated.accessUser || "",
+    accessKeyHash: validated.accessKey ? await bcrypt.hash(validated.accessKey, 12) : "",
+    defaultFacultyEmail: validated.defaultFacultyEmail || "",
+    classIds: validated.classIds || [],
+    classNames: validated.classNames || [],
+    updatedBy: req.user.userId
+  };
+
+  try {
+    const created = await SmartboardSetting.create(payload);
+    res.status(201).json({ message: "Smartboard created", smartboard: { id: String(created._id) } });
+  } catch (error) {
+    handleDuplicateKeyError(error, "Smartboard");
+  }
+});
+
+const updateSmartboard = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!Types.ObjectId.isValid(id)) throw new ApiError(400, "id is invalid");
+
+  const { key, accessUser, accessKey, defaultFacultyEmail, classIds } = req.body;
+  const validated = await validateSmartboardSettingsInput({ accessUser, accessKey, defaultFacultyEmail, classIds });
+
+  const patch = {
+    accessUser: validated.accessUser || "",
+    defaultFacultyEmail: validated.defaultFacultyEmail || "",
+    classIds: validated.classIds || [],
+    classNames: validated.classNames || [],
+    updatedBy: req.user.userId
+  };
+
+  if (validated.accessKey) {
+    patch.accessKeyHash = await bcrypt.hash(validated.accessKey, 12);
+  }
+  if (key) patch.key = String(key).trim();
+
+  try {
+    const updated = await SmartboardSetting.findByIdAndUpdate(id, { $set: patch }, { new: true }).lean().exec();
+    if (!updated) throw new ApiError(404, "Smartboard not found");
+    res.status(200).json({ message: "Smartboard updated", smartboard: { id: String(updated._id) } });
+  } catch (error) {
+    handleDuplicateKeyError(error, "Smartboard");
+  }
+});
+
+const deleteSmartboard = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!Types.ObjectId.isValid(id)) throw new ApiError(400, "id is invalid");
+  const result = await SmartboardSetting.deleteOne({ _id: id });
+  if (result.deletedCount === 0) throw new ApiError(404, "Smartboard not found");
+  res.status(200).json({ message: "Smartboard deleted" });
+});
+
+// ===== end smartboard CRUD =====
+
+async function validateSmartboardSettingsInput({ accessUser, accessKey, defaultFacultyEmail, classIds }) {
+  const normalizedAccessUser = String(accessUser || "").trim();
+  const normalizedAccessKey = String(accessKey || "").trim();
+  const normalizedDefaultFacultyEmail = normalizeEmail(defaultFacultyEmail);
+  const normalizedClassIds = parseClassIdsInput(classIds || []);
+
+  if (normalizedAccessKey && !normalizedAccessUser) {
+    throw new ApiError(400, "accessUser is required when setting a smartboard access key");
+  }
+
+  if (!normalizedAccessKey && normalizedAccessUser) {
+    throw new ApiError(400, "accessKey is required when setting a smartboard access user");
+  }
+
+  if (normalizedDefaultFacultyEmail && !validateEmailByRole(normalizedDefaultFacultyEmail, ROLES.FACULTY)) {
+    throw new ApiError(400, "defaultFacultyEmail must be a verified faculty email");
+  }
+
+  // validate classIds and resolve names
+  const resolvedClassIds = [];
+  const resolvedClassNames = [];
+  for (const cid of normalizedClassIds) {
+    if (!Types.ObjectId.isValid(cid)) {
+      throw new ApiError(400, `classIds item is invalid: ${cid}`);
+    }
+    const classDoc = await Class.findById(cid).select("name year section").lean().exec();
+    if (!classDoc) throw new ApiError(404, `Class not found: ${cid}`);
+    resolvedClassIds.push(String(classDoc._id));
+    resolvedClassNames.push(classDoc.name || `${classDoc.year}-${classDoc.section}`);
+  }
+
+  return {
+    accessUser: normalizedAccessUser,
+    accessKey: normalizedAccessKey,
+    defaultFacultyEmail: normalizedDefaultFacultyEmail,
+    classIds: resolvedClassIds,
+    classNames: resolvedClassNames
   };
 }
 
@@ -513,7 +687,7 @@ const deleteDepartment = asyncHandler(async (req, res) => {
 });
 
 const createClass = asyncHandler(async (req, res) => {
-  const { departmentId, year, section, name } = req.body;
+  const { departmentId, year, section, name, smartboardAccessUser, smartboardAccessKey } = req.body;
   if (!departmentId || !year || !section || !name) {
     throw new ApiError(400, "departmentId, year, section, and name are required");
   }
@@ -527,12 +701,17 @@ const createClass = asyncHandler(async (req, res) => {
   }
 
   try {
-    const result = await Class.create({
+    const payload = {
       departmentId,
       year: Number(year),
       section: String(section).trim().toUpperCase(),
       name: String(name).trim()
-    });
+    };
+
+    if (smartboardAccessUser) payload.smartboardAccessUser = String(smartboardAccessUser).trim();
+    if (smartboardAccessKey) payload.smartboardAccessKeyHash = await bcrypt.hash(String(smartboardAccessKey), 12);
+
+    const result = await Class.create(payload);
 
     res.status(201).json({
       message: "Class created",
@@ -556,6 +735,17 @@ const updateClass = asyncHandler(async (req, res) => {
   if (req.body.name !== undefined) payload.name = String(req.body.name).trim();
   if (req.body.year !== undefined) payload.year = Number(req.body.year);
   if (req.body.section !== undefined) payload.section = String(req.body.section).trim().toUpperCase();
+
+  // smartboard fields
+  if (req.body.smartboardAccessUser !== undefined) {
+    payload.smartboardAccessUser = String(req.body.smartboardAccessUser || "").trim();
+  }
+  if (req.body.smartboardAccessKey !== undefined) {
+    // if empty string provided, clear stored hash
+    const key = String(req.body.smartboardAccessKey || "").trim();
+    if (key) payload.smartboardAccessKeyHash = await bcrypt.hash(key, 12);
+    else payload.smartboardAccessKeyHash = "";
+  }
 
   if (!Object.keys(payload).length) {
     throw new ApiError(400, "At least one field is required for update");
@@ -581,7 +771,9 @@ const updateClass = asyncHandler(async (req, res) => {
         section: updated.section,
         departmentId: updated.departmentId?._id ? String(updated.departmentId._id) : null,
         department: updated.departmentId?.name || null,
-        departmentCode: updated.departmentId?.code || null
+        departmentCode: updated.departmentId?.code || null,
+        smartboardAccessUser: updated.smartboardAccessUser || "",
+        hasSmartboardKey: Boolean(updated.smartboardAccessKeyHash)
       }
     });
   } catch (error) {
@@ -1210,7 +1402,9 @@ const getClasses = asyncHandler(async (req, res) => {
       section: item.section,
       departmentId: item.departmentId?._id ? String(item.departmentId._id) : null,
       department: item.departmentId?.name || null,
-      departmentCode: item.departmentId?.code || null
+      departmentCode: item.departmentId?.code || null,
+      smartboardAccessUser: item.smartboardAccessUser || "",
+      hasSmartboardKey: Boolean(item.smartboardAccessKeyHash)
     }))
   });
 });
@@ -1733,24 +1927,45 @@ const getMailSettings = asyncHandler(async (req, res) => {
 
 const upsertMailSettings = asyncHandler(async (req, res) => {
   const existing = await SmtpSetting.findOne({ key: "default" }).lean().exec();
+  const provider = String(req.body.provider ?? existing?.provider ?? "node")
+    .trim()
+    .toLowerCase();
+  const host = req.body.host !== undefined ? String(req.body.host || "").trim() : String(existing?.host || "").trim();
+  const port = req.body.port !== undefined ? Number(req.body.port || 587) : Number(existing?.port || 587);
+  const secure = req.body.secure !== undefined ? Boolean(req.body.secure) : Boolean(existing?.secure);
+  const starttls =
+    req.body.starttls !== undefined ? Boolean(req.body.starttls) : existing?.starttls ?? true;
+  const timeoutSeconds =
+    req.body.timeoutSeconds !== undefined
+      ? Number(req.body.timeoutSeconds || 20)
+      : Number(existing?.timeoutSeconds || 20);
+  const user = req.body.user !== undefined ? String(req.body.user || "").trim() : String(existing?.user || "").trim();
+  const pass = req.body.pass !== undefined ? String(req.body.pass || "").trim() : String(existing?.pass || "").trim();
+  const apiKey =
+    req.body.apiKey !== undefined ? String(req.body.apiKey || "").trim() : String(existing?.apiKey || "").trim();
+  const from = req.body.from !== undefined ? String(req.body.from || "").trim() : String(existing?.from || "").trim();
   const merged = {
     ...(existing || {}),
-    provider: String(req.body.provider || existing?.provider || "node").trim().toLowerCase(),
-    host: String(req.body.host || existing?.host || "").trim(),
-    port: Number(req.body.port || existing?.port || 587),
-    secure: req.body.secure !== undefined ? Boolean(req.body.secure) : Boolean(existing?.secure),
-    starttls:
-      req.body.starttls !== undefined ? Boolean(req.body.starttls) : existing?.starttls ?? true,
-    timeoutSeconds: Number(req.body.timeoutSeconds || existing?.timeoutSeconds || 20),
-    user: String(req.body.user || existing?.user || "").trim(),
-    pass:
-      req.body.pass !== undefined
-        ? String(req.body.pass || "").trim()
-        : String(existing?.pass || "").trim(),
-    from: String(req.body.from || existing?.from || "").trim()
+    provider,
+    host,
+    port,
+    secure,
+    starttls,
+    timeoutSeconds,
+    user,
+    pass,
+    apiKey,
+    from
   };
 
-  if (!merged.host || !merged.user || !merged.pass || !merged.from || !merged.port) {
+  if (provider === "resend") {
+    if (!apiKey && !pass) {
+      throw new ApiError(400, "apiKey is required when provider is resend");
+    }
+    if (!from) {
+      throw new ApiError(400, "from is required");
+    }
+  } else if (!host || !user || !pass || !from || !port) {
     throw new ApiError(400, "host, port, user, pass, and from are required");
   }
 
@@ -1766,7 +1981,8 @@ const upsertMailSettings = asyncHandler(async (req, res) => {
         starttls: merged.starttls,
         timeoutSeconds: merged.timeoutSeconds,
         user: merged.user,
-        pass: merged.pass,
+        pass: provider === "resend" ? "" : merged.pass,
+        apiKey: merged.apiKey,
         from: merged.from,
         updatedBy: req.user.userId
       }
@@ -1777,6 +1993,51 @@ const upsertMailSettings = asyncHandler(async (req, res) => {
   res.status(200).json({
     message: "Mail settings saved",
     settings: sanitizeMailSettingsForResponse(merged)
+  });
+});
+
+const getSmartboardSettings = asyncHandler(async (req, res) => {
+  const settings = await getActiveSmartboardSettings();
+  res.status(200).json({
+    settings: sanitizeSmartboardSettingsForResponse(settings)
+  });
+});
+
+const upsertSmartboardSettings = asyncHandler(async (req, res) => {
+  const existing = await SmartboardSetting.findOne({ key: "default" }).lean().exec();
+  const normalized = await validateSmartboardSettingsInput({
+    accessUser: req.body.accessUser,
+    accessKey: req.body.accessKey,
+    defaultFacultyEmail: req.body.defaultFacultyEmail,
+    classIds: req.body.classIds
+  });
+
+  const updatePayload = {
+    key: "default",
+    accessUser: normalized.accessUser,
+    defaultFacultyEmail: normalized.defaultFacultyEmail,
+    classIds: normalized.classIds,
+    classNames: normalized.classNames,
+    updatedBy: req.user.userId
+  };
+
+  if (normalized.accessKey) {
+    updatePayload.accessKeyHash = await bcrypt.hash(normalized.accessKey, 12);
+  } else if (!normalized.accessUser) {
+    updatePayload.accessKeyHash = "";
+  }
+
+  await SmartboardSetting.updateOne(
+    { key: "default" },
+    { $set: updatePayload },
+    { upsert: true }
+  );
+
+  const saved = await SmartboardSetting.findOne({ key: "default" }).lean().exec();
+
+  res.status(200).json({
+    message: "Smartboard settings saved",
+    settings: sanitizeSmartboardSettingsForResponse(saved || updatePayload)
   });
 });
 
@@ -2009,6 +2270,11 @@ module.exports = {
   getDepartments,
   getUploadsAdmin,
   getMailSettings,
+  getSmartboardSettings,
+  listSmartboards,
+  createSmartboard,
+  updateSmartboard,
+  deleteSmartboard,
   getSubjects,
   getAnalytics,
   getAnnouncementsForAdmin,
@@ -2019,5 +2285,6 @@ module.exports = {
   updateDepartment,
   updateSubject,
   updateUserByAdmin,
-  upsertMailSettings
+  upsertMailSettings,
+  upsertSmartboardSettings
 };

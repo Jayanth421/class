@@ -6,17 +6,17 @@
 
 :root {
   --glass-bg: linear-gradient(160deg, rgba(207, 207, 207, 0.92), rgba(207, 207, 207, 0.8));
-  --glass-border: rgba(127, 73, 180, 0.4);
+  --glass-border: rgba(0, 0, 0, 0.4);
   --text-soft: #141414;
   --student-bg-1: #CFCFCF;
   --student-bg-2: #CFCFCF;
   --student-bg-3: #CFCFCF;
   --student-surface: #CFCFCF;
   --student-card: #CFCFCF;
-  --student-border: #7F49B4;
+  --student-border: #0000;
   --student-soft: #141414;
   --student-text: #141414;
-  --student-accent: #7F49B4;
+  --student-accent: #0000;
   --admin-bg: #CFCFCF;
   --admin-surface: #CFCFCF;
   --admin-card: #CFCFCF;
@@ -170,7 +170,7 @@ body.student-mode.student-dark-mode .student-shell .glass-card [class*="border-w
 }
 
 body.student-mode.student-dark-mode .student-shell .bg-gradient-to-r.from-violetBrand-500.to-brand-500 {
-  background-image: linear-gradient(90deg, #7F49B4, #7F49B4);
+  background-image: linear-gradient(90deg, #151415, #0a0a0a);
 }
 
 body.student-mode.student-dark-mode .student-topbar {
@@ -408,8 +408,8 @@ body.student-mode.student-dark-mode .student-profile-page .student-profile-accen
 }
 
 .admin-main .admin-pill:hover {
-  border-color: #7F49B4;
-  background: #7F49B4;
+  border-color: #080808;
+  background: #111111;
 }
 
 .admin-main .admin-pill.active {
@@ -466,13 +466,13 @@ body.student-mode.student-dark-mode .student-profile-page .student-profile-accen
 .admin-main button[class*="bg-white/"],
 .admin-main a[class*="bg-white/"] {
   background: var(--admin-primary-soft) !important;
-  border-color: #7F49B4 !important;
+  border-color: #0c0c0c !important;
   color: var(--admin-primary) !important;
 }
 
 .admin-main button[class*="bg-white/"]:hover,
 .admin-main a[class*="bg-white/"]:hover {
-  background: #7F49B4 !important;
+  background: #111111 !important;
 }
 
 .admin-main input::placeholder,

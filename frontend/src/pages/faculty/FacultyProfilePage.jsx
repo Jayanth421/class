@@ -372,8 +372,12 @@ export default function FacultyProfilePage() {
             <p className="faculty-profile-tip mt-4 rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-xs text-[#141414]">
               Tip: keep your profile photo and mobile number updated for smooth approvals and communication.
             </p>
+            
           </div>
         </div>
+        <div className="sm:hidden">
+        
+      </div>
       </div>
 
       {message ? (

@@ -13,7 +13,9 @@ export default function AdminClassesPage() {
     departmentId: "",
     name: "",
     year: "",
-    section: ""
+    section: "",
+    smartboardAccessUser: "",
+    smartboardAccessKey: ""
   });
   const [subjectForm, setSubjectForm] = useState({
     classId: "",
@@ -28,7 +30,9 @@ export default function AdminClassesPage() {
     departmentId: "",
     name: "",
     year: "",
-    section: ""
+    section: "",
+    smartboardAccessUser: "",
+    smartboardAccessKey: ""
   });
   const [editSubjectForm, setEditSubjectForm] = useState({
     classId: "",
@@ -73,15 +77,24 @@ export default function AdminClassesPage() {
     event.preventDefault();
     setError("");
     setMessage("");
+
+    // validate optional 4-digit code if provided
+    if (classForm.smartboardAccessKey && !/^\d{4}$/.test(classForm.smartboardAccessKey)) {
+      setError("Smartboard access code must be 4 digits");
+      return;
+    }
+
     try {
       await api.post("/admin/classes", {
         departmentId: classForm.departmentId,
         name: classForm.name.trim(),
         year: Number(classForm.year),
-        section: classForm.section.trim().toUpperCase()
+        section: classForm.section.trim().toUpperCase(),
+        smartboardAccessUser: (classForm.smartboardAccessUser || "").trim(),
+        smartboardAccessKey: classForm.smartboardAccessKey || ""
       });
       setMessage("Class created successfully");
-      setClassForm({ departmentId: "", name: "", year: "", section: "" });
+      setClassForm({ departmentId: "", name: "", year: "", section: "", smartboardAccessUser: "", smartboardAccessKey: "" });
       loadData();
     } catch (requestError) {
       setError(requestError?.response?.data?.message || "Failed to create class");
@@ -113,19 +126,31 @@ export default function AdminClassesPage() {
       departmentId: item.departmentId || "",
       name: item.name || "",
       year: String(item.year || ""),
-      section: item.section || ""
+      section: item.section || "",
+      smartboardAccessUser: item.smartboardAccessUser || "",
+      smartboardAccessKey: ""
     });
   };
 
   const saveEditClass = async (classId) => {
     setError("");
     setMessage("");
+
+    // validate optional 4-digit code if provided
+    if (editClassForm.smartboardAccessKey && !/^\d{4}$/.test(editClassForm.smartboardAccessKey)) {
+      setError("Smartboard access code must be 4 digits");
+      return;
+    }
+
     try {
       await api.put(`/admin/classes/${classId}`, {
         departmentId: editClassForm.departmentId,
         name: editClassForm.name.trim(),
         year: Number(editClassForm.year),
-        section: editClassForm.section.trim().toUpperCase()
+        section: editClassForm.section.trim().toUpperCase(),
+        smartboardAccessUser: (editClassForm.smartboardAccessUser || "").trim(),
+        // only send key if provided (empty means keep existing on server)
+        smartboardAccessKey: editClassForm.smartboardAccessKey || undefined
       });
       setMessage("Class updated");
       setEditingClassId("");
@@ -254,6 +279,17 @@ export default function AdminClassesPage() {
               onChange={(event) => setClassForm((prev) => ({ ...prev, section: event.target.value }))}
               required
             />
+
+            <input
+              className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+              placeholder="Smartboard access code (4 digits, optional)"
+              value={classForm.smartboardAccessKey}
+              onChange={(event) => {
+                const digits = (event.target.value || "").replace(/\D/g, "").slice(0, 4);
+                setClassForm((prev) => ({ ...prev, smartboardAccessKey: digits }));
+              }}
+            />
+
             <button
               className="rounded-xl bg-gradient-to-r from-violetBrand-500 to-brand-500 px-4 py-3 text-sm font-semibold text-white md:col-span-2"
               type="submit"
@@ -349,6 +385,7 @@ export default function AdminClassesPage() {
                   <th className="px-3 py-2">Department</th>
                   <th className="px-3 py-2">Year</th>
                   <th className="px-3 py-2">Section</th>
+                  <th className="px-3 py-2">Smartboard</th>
                   <th className="px-3 py-2">Actions</th>
                 </tr>
               </thead>
@@ -422,6 +459,31 @@ export default function AdminClassesPage() {
                         />
                       ) : (
                         item.section
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      {editingClassId === item.id ? (
+                        <div className="grid gap-2">
+                          <input
+                            className="w-full rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-white"
+                            placeholder="Smartboard access user (optional)"
+                            value={editClassForm.smartboardAccessUser}
+                            onChange={(event) =>
+                              setEditClassForm((prev) => ({ ...prev, smartboardAccessUser: event.target.value }))
+                            }
+                          />
+                          <input
+                            className="w-full rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-white"
+                            placeholder="Smartboard access code (4 digits, leave blank to keep)"
+                            value={editClassForm.smartboardAccessKey}
+                            onChange={(event) => {
+                              const digits = (event.target.value || "").replace(/\D/g, "").slice(0, 4);
+                              setEditClassForm((prev) => ({ ...prev, smartboardAccessKey: digits }));
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        item.hasSmartboardKey ? (item.smartboardAccessUser ? item.smartboardAccessUser : 'Configured') : '-'
                       )}
                     </td>
                     <td className="px-3 py-3">

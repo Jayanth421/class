@@ -59,7 +59,7 @@ export default function StudentSubjectsPage() {
               </p>
             </div>
             <span
-              className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${getStatusClass(item.uploadStatus)}`}
+              className={`rounded-full px-2 py-1 text-[10px] text-black/100 font-semibold uppercase ${getStatusClass(item.uploadStatus)}`}
             >
               {item.uploadStatus}
             </span>
@@ -73,7 +73,7 @@ export default function StudentSubjectsPage() {
             )}
             {item.latestFileUrl ? (
               <a
-                className="mt-2 inline-block text-brand-300 hover:text-brand-100"
+                className="mt-2 inline-block text-black/100 hover:text-brand-100"
                 href={item.latestFileUrl}
                 target="_blank"
                 rel="noreferrer"
@@ -111,7 +111,7 @@ export default function StudentSubjectsPage() {
                             href={presentation.fileUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-brand-300 hover:text-brand-100"
+                            className="rounded-lg border border-green/100 bg-green-400/100 px-2 py-1 text-xs text-black hover:bg-green-400/100 disabled:opacity-70"
                           >
                             Open
                           </a>

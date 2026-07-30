@@ -381,13 +381,13 @@ export default function StudentPresentationsPage() {
           >
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <p className="rounded-full text-sm font-semibold text-black bg-white ">Actions</p>
+                <p className="rounded-full px-2 py-1 text-xs font-semibold text-black bg-white ">Actions</p>
                 <p className="text-xs text-soft">{activeMenuItem.title || activeMenuItem.fileName}</p>
               </div>
               <button
                 type="button"
                 onClick={closeActionMenu}
-                className="rounded-full border border-white/100 bg-white/5 px-2 py-1 text-xs text-black/100 hover:bg-black/10"
+                className="rounded-full border text-black bg-white px-2 py-1 text-xs text-black/100 hover:bg-black/10"
               >
                 Close
               </button>
@@ -395,7 +395,7 @@ export default function StudentPresentationsPage() {
             <div className="space-y-2">
               <button
                 type="button"
-                className="w-full rounded-2xl  border border-black/10 bg-white/10 px-4 py-3 text-left text-sm text-white hover:bg-white/15"
+                className="w-full rounded-2xl border border-black/10 bg-blue-500/100 px-4 py-3 text-center text-sm text-white hover:bg-blue-500/20"
                 onClick={() => {
                   startEdit(activeMenuItem);
                   closeActionMenu();
@@ -405,7 +405,7 @@ export default function StudentPresentationsPage() {
               </button>
               <button
                 type="button"
-                className="w-full rounded-2xl bg-white/10 px-4 py-3 text-left text-sm text-white hover:bg-white/15"
+                className="w-full rounded-2xl border border-black/10 bg-violet-500/100 px-4 py-3 text-center text-sm text-black hover:bg-black/10"
                 onClick={async () => {
                   try {
                     await openRemoteFile(activeMenuItem.id);
@@ -420,7 +420,7 @@ export default function StudentPresentationsPage() {
               </button>
               <button
                 type="button"
-                className="w-full rounded-2xl bg-white/10 px-4 py-3 text-left text-sm text-white hover:bg-white/15"
+                className="w-full rounded-2xl border border-black/10 bg-green-500/100 px-4 py-3 text-center text-sm text-black hover:bg-black/10"
                 onClick={async () => {
                   try {
                     await viewRemoteFile(activeMenuItem.id);
@@ -433,7 +433,7 @@ export default function StudentPresentationsPage() {
               >
                 View
               </button>
-              <label className="block cursor-pointer rounded-2xl bg-green px-4 py-3 text-sm text-black hover:bg-white/15">
+              <label className="block cursor-pointer rounded-2xl bg-green px-4 py-3 text-center text-sm text-black hover:bg-white/15">
                 Replace
                 <input
                   type="file"
@@ -450,7 +450,7 @@ export default function StudentPresentationsPage() {
               </label>
               <button
                 type="button"
-                className="w-full rounded-2xl bg-red-500/10 px-4 py-3 text-left text-sm text-red-200 hover:bg-red-500/20"
+                className="w-full rounded-2xl bg-red-500/100 px-4 py-3 text-center text-sm text-red-200 hover:bg-red-500/20"
                 onClick={() => {
                   deletePresentation(activeMenuItem.id);
                   closeActionMenu();

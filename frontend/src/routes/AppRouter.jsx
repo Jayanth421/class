@@ -7,6 +7,7 @@ import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
 import AdminDepartmentsPage from "../pages/admin/AdminDepartmentsPage";
 import AdminFeatureMatrixPage from "../pages/admin/AdminFeatureMatrixPage";
 import AdminSettingsPage from "../pages/admin/AdminSettingsPage";
+import SmartboardsPage from "../pages/admin/SmartboardsPage";
 import AdminSubjectsPage from "../pages/admin/AdminSubjectsPage";
 import AdminUsersPage from "../pages/admin/AdminUsersPage";
 import FacultyClassesPage from "../pages/faculty/FacultyClassesPage";
@@ -102,6 +103,7 @@ export default function AppRouter() {
           <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
           <Route path="/admin/feature-matrix" element={<AdminFeatureMatrixPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
+          <Route path="/admin/smartboards" element={<SmartboardsPage />} />
         </Route>
 
         <Route

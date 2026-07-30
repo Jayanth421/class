@@ -100,7 +100,7 @@ export default function StudentHomePage() {
             Balance your uploads and stay aligned with class submissions.
           </p>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-4  grid grid-cols-3 gap-2">
             <MetricTile label="Subjects" value={metrics.subjectsCount || 0} />
             <MetricTile label="Uploads" value={metrics.uploadedCount || 0} />
             <MetricTile label="Pending" value={metrics.pendingCount || 0} />

@@ -15,6 +15,10 @@ const smartboardSessionSchema = new mongoose.Schema(
       ref: "User",
       default: null
     },
+    classIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Class" }],
+      default: []
+    },
     status: {
       type: String,
       enum: ["PENDING", "AUTHORIZED", "EXPIRED"],

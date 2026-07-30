@@ -8,6 +8,9 @@ function mapSession(sessionDoc) {
     sessionToken: sessionDoc.sessionToken,
     smartboardName: sessionDoc.smartboardName,
     authorizedBy: sessionDoc.authorizedBy ? String(sessionDoc.authorizedBy) : null,
+    classIds: Array.isArray(sessionDoc.classIds)
+      ? sessionDoc.classIds.map((c) => String(c))
+      : [],
     status: sessionDoc.status,
     expiresAt: sessionDoc.expiresAt,
     authorizedAt: sessionDoc.authorizedAt,
@@ -15,10 +18,11 @@ function mapSession(sessionDoc) {
   };
 }
 
-async function createSession({ sessionToken, smartboardName = null, expiresAt }) {
+async function createSession({ sessionToken, smartboardName = null, expiresAt, classIds = [] }) {
   return SmartboardSession.create({
     sessionToken,
     smartboardName,
+    classIds: Array.isArray(classIds) ? classIds : [],
     status: SMARTBOARD_SESSION_STATUS.PENDING,
     expiresAt
   });

@@ -12,6 +12,7 @@ const authRoutes = require("./routes/authRoutes");
 const facultyRoutes = require("./routes/facultyRoutes");
 const storageRoutes = require("./routes/storageRoutes");
 const studentRoutes = require("./routes/studentRoutes");
+const supabaseRoutes = require("./routes/supabaseRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const notFound = require("./middlewares/notFound");
 const { getLocalUploadDir, getStorageProvider } = require("./services/storageService");
@@ -80,6 +81,7 @@ app.use("/api/student", studentRoutes);
 app.use("/api/faculty", facultyRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/storage", storageRoutes);
+app.use("/api/supabase", supabaseRoutes);
 
 const shouldServeFrontend = readBooleanEnv("SERVE_FRONTEND", isProduction);
 if (shouldServeFrontend) {

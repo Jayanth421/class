@@ -1,6 +1,8 @@
 const nodemailer = require("nodemailer");
 const path = require("path");
 const { spawn } = require("child_process");
+const mongoose = require("mongoose");
+const SmtpSetting = require("../mongoModels/SmtpSetting");
 const ApiError = require("../utils/apiError");
 
 let transporter;
@@ -11,23 +13,39 @@ function toBool(value, defaultValue = false) {
   return String(value).toLowerCase() === "true";
 }
 
+function isPlaceholderValue(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === "example.com" ||
+    normalized === "smtp.example.com" ||
+    normalized === "your_smtp_user" ||
+    normalized === "your_smtp_password" ||
+    normalized.includes("replace_with") ||
+    normalized.includes("<")
+  );
+}
+
 function getMailProvider() {
   return String(process.env.MAIL_PROVIDER || "node").trim().toLowerCase();
 }
 
-function getSmtpConfig(overrideConfig = null) {
-  const baseConfig = {
+function getEnvSmtpConfig() {
+  return {
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
     secure: toBool(process.env.SMTP_SECURE, false),
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
-    from: process.env.SMTP_FROM || process.env.SMTP_USER || "",
+    apiKey: process.env.RESEND_API_KEY || "",
+    from: process.env.RESEND_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || "",
     starttls: toBool(process.env.SMTP_STARTTLS, true),
     timeoutSeconds: Number(process.env.SMTP_TIMEOUT_SECONDS || 20),
     provider: getMailProvider()
   };
+}
 
+function mergeSmtpConfig(baseConfig, overrideConfig = null) {
   if (!overrideConfig) return baseConfig;
 
   return {
@@ -49,7 +67,49 @@ function getSmtpConfig(overrideConfig = null) {
   };
 }
 
+function getSmtpConfig(overrideConfig = null) {
+  const baseConfig = getEnvSmtpConfig();
+  return mergeSmtpConfig(baseConfig, overrideConfig);
+}
+
+async function getActiveSmtpConfig(overrideConfig = null) {
+  const envConfig = getEnvSmtpConfig();
+  let storedConfig = null;
+
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const saved = await SmtpSetting.findOne({ key: "default" }).lean().exec();
+      if (saved) {
+        storedConfig = {
+          provider: String(saved.provider || envConfig.provider || "node").trim().toLowerCase(),
+          host: String(saved.host || envConfig.host || "").trim(),
+          port: Number(saved.port || envConfig.port || 587),
+          secure: Boolean(saved.secure ?? envConfig.secure),
+          starttls: saved.starttls === undefined ? envConfig.starttls : Boolean(saved.starttls),
+          timeoutSeconds: Number(saved.timeoutSeconds || envConfig.timeoutSeconds || 20),
+          user: String(saved.user || envConfig.user || "").trim(),
+          pass: String(saved.pass || envConfig.pass || "").trim(),
+          apiKey: String(saved.apiKey || envConfig.apiKey || "").trim(),
+          from: String(saved.from || envConfig.from || "").trim()
+        };
+      }
+    }
+  } catch (_error) {
+    storedConfig = null;
+  }
+
+  const baseConfig = storedConfig ? mergeSmtpConfig(envConfig, storedConfig) : envConfig;
+  return mergeSmtpConfig(baseConfig, overrideConfig);
+}
+
 function assertSmtpConfig(config) {
+  if (config.provider === "resend") {
+    if (!config.apiKey || !config.from) {
+      throw new ApiError(500, "Resend API key and from address are required");
+    }
+    return;
+  }
+
   if (!config.host || !config.port || !config.user || !config.pass || !config.from) {
     throw new ApiError(500, "SMTP configuration is incomplete");
   }
@@ -68,8 +128,8 @@ function buildTransporter(smtpConfig) {
   });
 }
 
-function getTransporter(smtpConfigOverride = null) {
-  const smtpConfig = getSmtpConfig(smtpConfigOverride);
+async function getTransporter(smtpConfigOverride = null) {
+  const smtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
   assertSmtpConfig(smtpConfig);
 
   if (smtpConfigOverride) {
@@ -85,8 +145,8 @@ function getTransporter(smtpConfigOverride = null) {
   return transporter;
 }
 
-function sendWithPythonMailer(payload, smtpConfigOverride = null) {
-  const smtpConfig = getSmtpConfig(smtpConfigOverride);
+async function sendWithPythonMailer(payload, smtpConfigOverride = null) {
+  const smtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
   assertSmtpConfig(smtpConfig);
 
   const pythonBin =
@@ -158,9 +218,46 @@ function sendWithPythonMailer(payload, smtpConfigOverride = null) {
   });
 }
 
+async function sendWithResend(payload, smtpConfigOverride = null) {
+  const smtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
+  assertSmtpConfig(smtpConfig);
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${smtpConfig.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: smtpConfig.from,
+      to: Array.isArray(payload.to) ? payload.to : [payload.to],
+      subject: payload.subject,
+      text: payload.text || "",
+      html: payload.html || ""
+    })
+  });
+
+  let parsed;
+  try {
+    parsed = await response.json();
+  } catch (_error) {
+    parsed = null;
+  }
+
+  if (!response.ok) {
+    const detail = parsed?.message || "Resend API request failed";
+    throw new ApiError(502, "Failed to send email via Resend", {
+      status: response.status,
+      detail
+    });
+  }
+
+  return { ok: true, id: parsed?.id || null };
+}
+
 async function sendMail({ to, subject, text, html, smtpConfig = null }) {
   const smtpConfigOverride = smtpConfig;
-  const effectiveSmtpConfig = getSmtpConfig(smtpConfigOverride);
+  const effectiveSmtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
   const payload = {
     from: effectiveSmtpConfig.from,
     to,
@@ -173,7 +270,11 @@ async function sendMail({ to, subject, text, html, smtpConfig = null }) {
     return sendWithPythonMailer(payload, effectiveSmtpConfig);
   }
 
-  const smtp = getTransporter(smtpConfigOverride);
+  if (effectiveSmtpConfig.provider === "resend") {
+    return sendWithResend(payload, effectiveSmtpConfig);
+  }
+
+  const smtp = await getTransporter(smtpConfigOverride);
   return smtp.sendMail(payload);
 }
 

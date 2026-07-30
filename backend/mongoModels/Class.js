@@ -23,6 +23,15 @@ const classSchema = new mongoose.Schema(
       required: true,
       trim: true,
       uppercase: true
+    },
+    // Optional smartboard access for this class
+    smartboardAccessUser: {
+      type: String,
+      default: ""
+    },
+    smartboardAccessKeyHash: {
+      type: String,
+      default: ""
     }
   },
   {

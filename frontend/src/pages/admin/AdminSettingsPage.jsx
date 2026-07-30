@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import GlassCard from "../../components/GlassCard";
 import api from "../../services/api";
 import {
@@ -17,6 +18,7 @@ const initialMailSettings = {
   timeoutSeconds: "20",
   user: "",
   pass: "",
+  apiKey: "",
   from: ""
 };
 
@@ -30,6 +32,14 @@ const initialBulkMail = {
 
 const initialUiSettings = {
   mobileNavColumns: String(DEFAULT_ADMIN_UI_PREFS.mobileNavColumns)
+};
+
+const initialSmartboardSettings = {
+  accessUser: "",
+  accessKey: "",
+  defaultFacultyEmail: "",
+  classIds: [],
+  classNames: []
 };
 
 const studentEmailRegex = /^(2[1-5])h51[a-z][a-z0-9]{4}@cmrcet\.ac\.in$/i;
@@ -47,12 +57,15 @@ export default function AdminSettingsPage() {
   const [mailSettings, setMailSettings] = useState(initialMailSettings);
   const [bulkMail, setBulkMail] = useState(initialBulkMail);
   const [uiSettings, setUiSettings] = useState(initialUiSettings);
+  const [smartboardSettings, setSmartboardSettings] = useState(initialSmartboardSettings);
+  const [classesList, setClassesList] = useState([]);
   const [testEmail, setTestEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingUi, setSavingUi] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [sendingBulk, setSendingBulk] = useState(false);
+  const navigate = useNavigate();
   const [supabaseBridge, setSupabaseBridge] = useState({
     table: "todos",
     select: "id,name",
@@ -79,10 +92,35 @@ export default function AdminSettingsPage() {
         timeoutSeconds: String(data.timeoutSeconds || 20),
         user: data.user || "",
         pass: data.pass === "********" ? "" : data.pass || "",
+        apiKey: data.apiKey === "********" ? "" : data.apiKey || "",
         from: data.from || ""
       });
     } catch (requestError) {
       setError(requestError?.response?.data?.message || "Failed to load mail settings");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSmartboardSettings = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await api.get("/admin/settings/smartboard");
+      const data = response.data.settings || {};
+      setSmartboardSettings({
+        accessUser: data.accessUser || "",
+        accessKey: data.accessKey || "",
+        defaultFacultyEmail: data.defaultFacultyEmail || "",
+        classIds: data.classIds || [],
+        classNames: data.classNames || []
+      });
+
+      // load classes for selection
+      const classesResp = await api.get('/admin/classes');
+      setClassesList((classesResp.data.classes || []).map(c => ({ id: c.id, name: c.name || `${c.year}-${c.section}` })));
+    } catch (requestError) {
+      setError(requestError?.response?.data?.message || "Failed to load smartboard settings");
     } finally {
       setLoading(false);
     }
@@ -97,6 +135,7 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     loadMailSettings();
+    loadSmartboardSettings();
     loadUiSettings();
   }, []);
 
@@ -115,12 +154,34 @@ export default function AdminSettingsPage() {
         timeoutSeconds: Number(mailSettings.timeoutSeconds),
         user: mailSettings.user.trim(),
         pass: mailSettings.pass,
+        apiKey: mailSettings.apiKey.trim(),
         from: mailSettings.from.trim()
       });
       setMessage("Mail settings saved successfully");
       loadMailSettings();
     } catch (requestError) {
       setError(requestError?.response?.data?.message || "Failed to save mail settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveSmartboardSettings = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      await api.put("/admin/settings/smartboard", {
+        accessUser: smartboardSettings.accessUser.trim(),
+        accessKey: smartboardSettings.accessKey,
+        defaultFacultyEmail: smartboardSettings.defaultFacultyEmail.trim(),
+        classIds: smartboardSettings.classIds || []
+      });
+      setMessage("Smartboard settings saved successfully");
+      loadSmartboardSettings();
+    } catch (requestError) {
+      setError(requestError?.response?.data?.message || "Failed to save smartboard settings");
     } finally {
       setSaving(false);
     }
@@ -199,6 +260,8 @@ export default function AdminSettingsPage() {
       setSendingBulk(false);
     }
   };
+
+  const isResendProvider = mailSettings.provider === "resend";
 
   const saveUiSettings = (event) => {
     event.preventDefault();
@@ -365,51 +428,69 @@ export default function AdminSettingsPage() {
           >
             <option value="node">node</option>
             <option value="python">python</option>
+            <option value="resend">resend</option>
           </select>
-          <input
-            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
-            placeholder="SMTP Host"
-            value={mailSettings.host}
-            onChange={(event) =>
-              setMailSettings((prev) => ({ ...prev, host: event.target.value }))
-            }
-            required
-          />
-          <input
-            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
-            placeholder="SMTP Port"
-            value={mailSettings.port}
-            onChange={(event) =>
-              setMailSettings((prev) => ({ ...prev, port: event.target.value }))
-            }
-            required
-          />
-          <input
-            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
-            placeholder="SMTP Timeout Seconds"
-            value={mailSettings.timeoutSeconds}
-            onChange={(event) =>
-              setMailSettings((prev) => ({ ...prev, timeoutSeconds: event.target.value }))
-            }
-          />
-          <input
-            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
-            placeholder="SMTP User"
-            value={mailSettings.user}
-            onChange={(event) =>
-              setMailSettings((prev) => ({ ...prev, user: event.target.value }))
-            }
-            required
-          />
-          <input
-            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
-            placeholder="SMTP Password"
-            type="password"
-            value={mailSettings.pass}
-            onChange={(event) =>
-              setMailSettings((prev) => ({ ...prev, pass: event.target.value }))
-            }
-          />
+
+          {isResendProvider ? (
+            <input
+              className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+              placeholder="Resend API Key"
+              type="password"
+              value={mailSettings.apiKey}
+              onChange={(event) =>
+                setMailSettings((prev) => ({ ...prev, apiKey: event.target.value }))
+              }
+              required
+            />
+          ) : (
+            <>
+              <input
+                className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+                placeholder="SMTP Host"
+                value={mailSettings.host}
+                onChange={(event) =>
+                  setMailSettings((prev) => ({ ...prev, host: event.target.value }))
+                }
+                required
+              />
+              <input
+                className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+                placeholder="SMTP Port"
+                value={mailSettings.port}
+                onChange={(event) =>
+                  setMailSettings((prev) => ({ ...prev, port: event.target.value }))
+                }
+                required
+              />
+              <input
+                className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+                placeholder="SMTP Timeout Seconds"
+                value={mailSettings.timeoutSeconds}
+                onChange={(event) =>
+                  setMailSettings((prev) => ({ ...prev, timeoutSeconds: event.target.value }))
+                }
+              />
+              <input
+                className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+                placeholder="SMTP User"
+                value={mailSettings.user}
+                onChange={(event) =>
+                  setMailSettings((prev) => ({ ...prev, user: event.target.value }))
+                }
+                required
+              />
+              <input
+                className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+                placeholder="SMTP Password"
+                type="password"
+                value={mailSettings.pass}
+                onChange={(event) =>
+                  setMailSettings((prev) => ({ ...prev, pass: event.target.value }))
+                }
+              />
+            </>
+          )}
+
           <input
             className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300 md:col-span-2"
             placeholder="From Address (Name <email@domain.com>)"
@@ -420,26 +501,34 @@ export default function AdminSettingsPage() {
             required
           />
 
-          <label className="flex items-center gap-2 text-sm text-slate-200">
-            <input
-              type="checkbox"
-              checked={mailSettings.secure}
-              onChange={(event) =>
-                setMailSettings((prev) => ({ ...prev, secure: event.target.checked }))
-              }
-            />
-            SMTP Secure (SSL)
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-200">
-            <input
-              type="checkbox"
-              checked={mailSettings.starttls}
-              onChange={(event) =>
-                setMailSettings((prev) => ({ ...prev, starttls: event.target.checked }))
-              }
-            />
-            STARTTLS
-          </label>
+          {isResendProvider ? (
+            <p className="text-sm text-soft md:col-span-2">
+              Resend uses an API key instead of SMTP credentials.
+            </p>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={mailSettings.secure}
+                  onChange={(event) =>
+                    setMailSettings((prev) => ({ ...prev, secure: event.target.checked }))
+                  }
+                />
+                SMTP Secure (SSL)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={mailSettings.starttls}
+                  onChange={(event) =>
+                    setMailSettings((prev) => ({ ...prev, starttls: event.target.checked }))
+                  }
+                />
+                STARTTLS
+              </label>
+            </>
+          )}
 
           <button
             className="rounded-xl bg-gradient-to-r from-violetBrand-500 to-brand-500 px-4 py-3 text-sm font-semibold text-white md:col-span-2"
@@ -448,6 +537,75 @@ export default function AdminSettingsPage() {
           >
             {saving ? "Saving..." : "Save Mail Settings"}
           </button>
+        </form>
+      </GlassCard>
+
+      <GlassCard>
+        <h3 className="font-display text-lg text-white">Smartboard Access Settings</h3>
+        <p className="mt-2 text-sm text-soft">
+          Configure the smartboard access user, key, and default faculty mapping for manual smartboard login.
+        </p>
+
+        <form className="mt-5 grid gap-3 md:grid-cols-2" onSubmit={saveSmartboardSettings}>
+          <input
+            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+            placeholder="Smartboard access user"
+            value={smartboardSettings.accessUser}
+            onChange={(event) =>
+              setSmartboardSettings((prev) => ({ ...prev, accessUser: event.target.value }))
+            }
+          />
+          <input
+            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300"
+            placeholder="Smartboard access key"
+            type="password"
+            value={smartboardSettings.accessKey}
+            onChange={(event) =>
+              setSmartboardSettings((prev) => ({ ...prev, accessKey: event.target.value }))
+            }
+          />
+          <select
+            multiple
+            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300 h-40"
+            value={smartboardSettings.classIds || []}
+            onChange={(event) => {
+              const selected = Array.from(event.target.selectedOptions || []).map((o) => o.value);
+              setSmartboardSettings((prev) => ({ ...prev, classIds: selected }));
+            }}
+          >
+            {classesList.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          <input
+            className="rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-white outline-none focus:border-brand-300 md:col-span-2"
+            placeholder="Default faculty email for smartboard login"
+            type="email"
+            value={smartboardSettings.defaultFacultyEmail}
+            onChange={(event) =>
+              setSmartboardSettings((prev) => ({ ...prev, defaultFacultyEmail: event.target.value }))
+            }
+          />
+
+          <div className="md:col-span-2 flex gap-3">
+            <button
+              className="rounded-xl bg-gradient-to-r from-violetBrand-500 to-brand-500 px-4 py-3 text-sm font-semibold text-white flex-1"
+              type="submit"
+              disabled={saving}
+            >
+              {saving ? "Saving..." : "Save Smartboard Settings"}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/admin/smartboards')}
+              className="rounded-xl bg-white/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/25"
+            >
+              Manage Smartboards
+            </button>
+          </div>
         </form>
       </GlassCard>
 

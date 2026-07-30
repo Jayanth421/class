@@ -18,7 +18,8 @@ const {
   requestSmartboardOtp,
   resendRegistrationOtp,
   verifyRegistrationOtp,
-  verifySmartboardOtp
+  verifySmartboardOtp,
+  smartboardAccessLogin
 } = require("../controllers/authController");
 const { ROLES } = require("../config/constants");
 const authorizeRoles = require("../middlewares/authorizeRoles");
@@ -57,6 +58,7 @@ router.post("/refresh", refreshAccessToken);
 router.post("/logout", logout);
 
 router.post("/smartboard/session", createSmartboardSession);
+router.post("/smartboard/access-login", smartboardAccessLogin);
 router.post(
   "/smartboard/authorize",
   verifyJWT,

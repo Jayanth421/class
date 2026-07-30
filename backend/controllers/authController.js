@@ -34,6 +34,7 @@ const {
 } = require("../models/smartboardSessionModel");
 const { assignFacultyClasses, getFacultyClasses } = require("../models/facultyClassModel");
 const { getSubjectsByFacultyId } = require("../models/subjectModel");
+const SmartboardSetting = require("../mongoModels/SmartboardSetting");
 const Class = require("../mongoModels/Class");
 const Department = require("../mongoModels/Department");
 const SmartboardSession = require("../mongoModels/SmartboardSession");
@@ -42,7 +43,7 @@ const Upload = require("../mongoModels/Upload");
 const User = require("../mongoModels/User");
 const { createAndSendOtp, verifyOtp } = require("../services/otpService");
 const { generateQrDataUrl } = require("../services/qrService");
-const { createPresignedDownloadUrl } = require("../services/s3Service");
+const { createPresignedDownloadUrl } = require("../services/storageService");
 const ApiError = require("../utils/apiError");
 const asyncHandler = require("../utils/asyncHandler");
 const { hashToken } = require("../utils/crypto");
@@ -206,6 +207,28 @@ function resolveSmartboardActionBase(req) {
   }
 
   return "http://localhost:5173";
+}
+
+async function getActiveSmartboardSettings() {
+  const envSettings = {
+    accessUser: String(process.env.SMARTBOARD_ACCESS_USER || "").trim(),
+    accessKeyPlain: String(process.env.SMARTBOARD_ACCESS_KEY || "").trim(),
+    defaultFacultyEmail: String(process.env.SMARTBOARD_DEFAULT_FACULTY_EMAIL || "").trim(),
+    classIds: [],
+    classNames: []
+  };
+
+  const saved = await SmartboardSetting.findOne({ key: "default" }).lean().exec();
+  if (!saved) return envSettings;
+
+  return {
+    accessUser: saved.accessUser || envSettings.accessUser,
+    accessKeyHash: saved.accessKeyHash || "",
+    accessKeyPlain: envSettings.accessKeyPlain,
+    defaultFacultyEmail: saved.defaultFacultyEmail || envSettings.defaultFacultyEmail,
+    classIds: Array.isArray(saved.classIds) ? saved.classIds.map((c) => String(c)) : [],
+    classNames: Array.isArray(saved.classNames) ? saved.classNames : []
+  };
 }
 
 const register = asyncHandler(async (req, res) => {
@@ -703,6 +726,155 @@ const authorizeSmartboardSessionByFaculty = asyncHandler(async (req, res) => {
   });
 });
 
+const smartboardAccessLogin = asyncHandler(async (req, res) => {
+  const accessUser = String(req.body.accessUser || "").trim();
+  const accessKey = String(req.body.accessKey || "").trim();
+  const smartboardName = String(req.body.smartboardName || "Classroom Smartboard").trim();
+
+  const configured = await getActiveSmartboardSettings();
+  const configuredAccessUser = String(configured.accessUser || "").trim();
+  const configuredAccessKeyHash = String(configured.accessKeyHash || "").trim();
+  const configuredEnvAccessKey = String(configured.accessKeyPlain || "").trim();
+
+  const classCodeConfigured = Boolean(
+    await Class.exists({ smartboardAccessKeyHash: { $ne: "" } })
+  );
+  const globalSmartboardConfigured = Boolean(
+    configuredAccessUser && (configuredAccessKeyHash || configuredEnvAccessKey)
+  );
+  if (!globalSmartboardConfigured && !classCodeConfigured) {
+    throw new ApiError(404, "Smartboard access login is not configured");
+  }
+
+  if (!accessKey) {
+    throw new ApiError(400, "accessKey is required");
+  }
+
+  // Try to match global config first
+  let usedClassId = null;
+  if (accessUser === configuredAccessUser) {
+    let validAccessKey = false;
+    if (configuredAccessKeyHash) {
+      validAccessKey = await bcrypt.compare(accessKey, configuredAccessKeyHash);
+    } else {
+      validAccessKey = accessKey === configuredEnvAccessKey;
+    }
+
+    if (!validAccessKey) {
+      // fallthrough to try class-level credentials
+    } else {
+      // matched global config -> select a faculty to associate with session
+      let faculty = null;
+      const defaultFacultyEmail = String(configured.defaultFacultyEmail || "").trim();
+      const defaultFacultyId = String(process.env.SMARTBOARD_DEFAULT_FACULTY_ID || "").trim();
+
+      if (defaultFacultyEmail) {
+        faculty = await getUserByEmail(normalizeEmail(defaultFacultyEmail));
+      }
+      if (!faculty && defaultFacultyId) {
+        faculty = await getUserById(defaultFacultyId);
+      }
+      if (!faculty) {
+        faculty = await User.findOne({ role: ROLES.FACULTY, isVerified: true })
+          .select("name email")
+          .lean()
+          .exec();
+      }
+
+      if (!faculty) {
+        throw new ApiError(500, "No faculty user is configured for smartboard access login");
+      }
+
+      const facultyId = String(faculty.id || faculty._id);
+      const sessionToken = uuidv4();
+      const expiryMinutes = Number(process.env.SMARTBOARD_QR_EXPIRES_MINUTES || 2);
+      const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
+
+      // attach class mapping from global smartboard settings if present
+      let classIdsForSession = [];
+      try {
+        const sbConfig = await getActiveSmartboardSettings();
+        if (sbConfig && Array.isArray(sbConfig.classIds) && sbConfig.classIds.length > 0) {
+          classIdsForSession = sbConfig.classIds;
+        }
+      } catch (_err) {
+        // ignore
+      }
+
+      const session = await createSession({ sessionToken, smartboardName, expiresAt, classIds: classIdsForSession });
+      await authorizeSession(sessionToken, facultyId);
+
+      const accessToken = signAccessToken({ userId: `smartboard:${session.id}`, role: ROLES.SMARTBOARD });
+
+      return res.status(200).json({
+        accessToken,
+        faculty: {
+          id: facultyId,
+          name: faculty.name || "Faculty",
+          email: faculty.email || ""
+        },
+        sessionToken
+      });
+    }
+  }
+
+  // If we reach here, either accessUser didn't match global config or key didn't match.
+  // Try class-level credential lookup.
+
+  let matchedClass = null;
+  if (accessUser) {
+    // Prefer explicit match by smartboardAccessUser when provided
+    const classDoc = await Class.findOne({ smartboardAccessUser: accessUser }).lean().exec();
+    if (classDoc && classDoc.smartboardAccessKeyHash) {
+      const validClassKey = await bcrypt.compare(accessKey, classDoc.smartboardAccessKeyHash);
+      if (validClassKey) matchedClass = classDoc;
+    }
+  } else {
+    // No accessUser provided: search classes with a configured key and compare
+    const candidateClasses = await Class.find({ smartboardAccessKeyHash: { $ne: "" } })
+      .select("_id name year section smartboardAccessKeyHash")
+      .lean()
+      .exec();
+    for (const c of candidateClasses) {
+      try {
+        if (c.smartboardAccessKeyHash && (await bcrypt.compare(accessKey, c.smartboardAccessKeyHash))) {
+          matchedClass = c;
+          break;
+        }
+      } catch (_err) {
+        // ignore compare errors
+      }
+    }
+  }
+
+  if (!matchedClass) {
+    throw new ApiError(401, "Invalid smartboard access credentials");
+  }
+
+  // create an authorized smartboard session scoped to the matched class
+  const sessionToken = uuidv4();
+  const expiryMinutes = Number(process.env.SMARTBOARD_QR_EXPIRES_MINUTES || 2);
+  const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
+
+  const session = await createSession({ sessionToken, smartboardName, expiresAt, classIds: [String(matchedClass._id)] });
+  // authorize with no specific faculty (class-scoped)
+  await authorizeSession(sessionToken, null);
+
+  const accessToken = signAccessToken({ userId: `smartboard:${session.id}`, role: ROLES.SMARTBOARD });
+
+  return res.status(200).json({
+    accessToken,
+    faculty: null,
+    class: {
+      id: String(matchedClass._id),
+      name: matchedClass.name || null,
+      year: matchedClass.year || null,
+      section: matchedClass.section || null
+    },
+    sessionToken
+  });
+});
+
 const requestSmartboardOtp = asyncHandler(async (req, res) => {
   const { sessionToken, facultyEmail } = req.body;
   const normalizedEmail = normalizeEmail(facultyEmail);
@@ -1011,6 +1183,8 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
   } = req.query;
   const role = String(req.user?.role || "").toUpperCase();
   let facultyId = null;
+  // scopedClassIds controls class scoping for smartboard sessions (may be set from session.classId)
+  let scopedClassIds = [];
 
   if (role === ROLES.FACULTY) {
     facultyId = String(req.user.userId);
@@ -1022,10 +1196,21 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
     }
 
     const smartboardSession = await SmartboardSession.findById(parts[1]).lean().exec();
-    if (!smartboardSession?.authorizedBy) {
-      throw new ApiError(401, "Smartboard session is not mapped to a faculty");
+    if (!smartboardSession) {
+      throw new ApiError(401, "Smartboard session not found");
     }
-    facultyId = String(smartboardSession.authorizedBy);
+
+    // If session has an assigned class, scope library to that class (show all faculty uploads for that class)
+    if (Array.isArray(smartboardSession.classIds) && smartboardSession.classIds.length > 0) {
+      // set scopedClassIds so later logic will use it
+      scopedClassIds = smartboardSession.classIds;
+      facultyId = null; // not scoping by faculty
+    } else {
+      if (!smartboardSession?.authorizedBy) {
+        throw new ApiError(401, "Smartboard session is not mapped to a faculty");
+      }
+      facultyId = String(smartboardSession.authorizedBy);
+    }
   } else if (role === ROLES.ADMIN) {
     const requestedFacultyId = String(req.query.facultyId || "").trim();
     if (requestedFacultyId && !Types.ObjectId.isValid(requestedFacultyId)) {
@@ -1053,9 +1238,13 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Forbidden role for smartboard library");
   }
 
-  const faculty = await User.findById(facultyId).select("name email").lean().exec();
-  if (!faculty) throw new ApiError(404, "Faculty not found");
+  let faculty = null;
+  if (facultyId) {
+    faculty = await User.findById(facultyId).select("name email").lean().exec();
+    if (!faculty) throw new ApiError(404, "Faculty not found");
+  }
 
+  // if smartboard session has class mapping, later getSmartboardLibrary will use it to scope results
   const classFilter = {};
   if (classId) {
     if (!Types.ObjectId.isValid(classId)) throw new ApiError(400, "classId is invalid");
@@ -1097,7 +1286,6 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
     classFilter.departmentId = department._id;
   }
 
-  let scopedClassIds = [];
   if (Object.keys(classFilter).length > 0) {
     const classDocs = await Class.find(classFilter).select("_id").lean().exec();
     scopedClassIds = classDocs.map((item) => item._id);
@@ -1115,7 +1303,10 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
     }
   }
 
-  const subjectFilter = { facultyId };
+  const subjectFilter = {};
+  if (facultyId) {
+    subjectFilter.facultyId = facultyId;
+  }
   if (scopedClassIds.length > 0) {
     subjectFilter.classId = { $in: scopedClassIds };
   }
@@ -1130,17 +1321,37 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
       select: "name year section departmentId",
       populate: { path: "departmentId", select: "name code" }
     })
+    .populate({ path: "facultyId", select: "_id name email" })
     .sort({ name: 1 })
     .lean()
     .exec();
 
+  // Build faculty list for scoped classes (distinct faculty assigned to subjects)
+  const facultyIdSet = new Set();
+  subjectDocs.forEach((s) => {
+    if (s.facultyId && s.facultyId._id) facultyIdSet.add(String(s.facultyId._id));
+  });
+
+  const facultyList = [];
+  if (facultyIdSet.size > 0) {
+    const facultyDocs = await User.find({ _id: { $in: Array.from(facultyIdSet) } })
+      .select("name email")
+      .lean()
+      .exec();
+    facultyDocs.forEach((f) => {
+      facultyList.push({ id: String(f._id), name: f.name || null, email: f.email || null });
+    });
+  }
+
   if (!subjectDocs.length) {
     return res.status(200).json({
-      faculty: {
-        id: String(faculty._id),
-        name: faculty.name,
-        email: faculty.email
-      },
+      faculty: faculty
+        ? {
+            id: String(faculty._id),
+            name: faculty.name,
+            email: faculty.email
+          }
+        : null,
       classes: [],
       subjects: [],
       presentations: []
@@ -1190,6 +1401,14 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
     subjects.map((item) => [String(item.id), item.classId || null])
   );
 
+  // Map subjectId -> facultyId (if populated)
+  const subjectToFacultyMap = new Map();
+  subjectDocs.forEach((s) => {
+    const sid = String(s._id);
+    const fid = s.facultyId && s.facultyId._id ? String(s.facultyId._id) : null;
+    subjectToFacultyMap.set(sid, fid);
+  });
+
   const presentations = await Promise.all(
     uploads.map(async (item) => {
       const subjectId = item.subjectId ? String(item.subjectId) : null;
@@ -1199,6 +1418,7 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
         id: String(item._id),
         subjectId,
         classId: subjectId ? subjectToClassMap.get(subjectId) || null : null,
+        facultyId: subjectId ? subjectToFacultyMap.get(subjectId) || null : null,
         title: item.title || item.fileName || null,
         fileName: item.fileName || null,
         fileType: item.fileType || null,
@@ -1214,16 +1434,19 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
   );
 
   return res.status(200).json({
-    faculty: {
-      id: String(faculty._id),
-      name: faculty.name,
-      email: faculty.email
-    },
+    faculty: faculty
+      ? {
+          id: String(faculty._id),
+          name: faculty.name,
+          email: faculty.email
+        }
+      : null,
     classes: Array.from(classesMap.values()).sort((a, b) =>
       String(a.name || "").localeCompare(String(b.name || ""))
     ),
     subjects,
-    presentations
+    presentations,
+    facultyList
   });
 });
 
@@ -1245,5 +1468,6 @@ module.exports = {
   requestSmartboardOtp,
   resendRegistrationOtp,
   verifyRegistrationOtp,
-  verifySmartboardOtp
+  verifySmartboardOtp,
+  smartboardAccessLogin
 };

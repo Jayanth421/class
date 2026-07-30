@@ -26,8 +26,8 @@ function getStorageUploadNetworkHint(uploadUrl) {
   const origin = typeof window !== "undefined" ? String(window.location.origin || "") : "";
 
   if (/amazonaws\.com/i.test(url)) {
-    const originHint = origin ? `Add ${origin} to your S3 bucket CORS AllowedOrigins (and allow PUT).` : "";
-    return `Storage upload request was blocked (usually S3 CORS). ${originHint} Or set backend S3_UPLOAD_MODE=proxy to upload via the backend API.`;
+    const originHint = origin ? `Add ${origin} to your storage bucket CORS AllowedOrigins (and allow PUT).` : "";
+    return `Storage upload request was blocked by CORS. ${originHint} Or set backend STORAGE_PROVIDER=supabase and SUPABASE_UPLOAD_MODE=proxy to upload via the backend API.`;
   }
 
   return "Storage upload request failed to reach the server. Check backend URL and network connectivity.";

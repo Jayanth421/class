@@ -25,10 +25,16 @@ const {
   getSubjects,
   getAnalytics,
   getAnnouncementsForAdmin,
+  getSmartboardSettings,
+  listSmartboards,
+  createSmartboard,
+  updateSmartboard,
+  deleteSmartboard,
   getUsers,
   sendBulkMail,
   sendTestMail,
   updateClass,
+  upsertSmartboardSettings,
   updateDepartment,
   updateSubject,
   updateUserByAdmin,
@@ -72,6 +78,14 @@ router.get("/downloads/uploads-zip", downloadUploadsZipBySection);
 router.get("/templates/academic", downloadAcademicTemplate);
 router.get("/templates/users", downloadUsersTemplate);
 router.get("/settings/mail", getMailSettings);
+router.get("/settings/smartboard", getSmartboardSettings);
+router.put("/settings/smartboard", upsertSmartboardSettings);
+
+// Multiple smartboards (CRUD)
+router.get("/settings/smartboards", listSmartboards);
+router.post("/settings/smartboards", createSmartboard);
+router.put("/settings/smartboards/:id", updateSmartboard);
+router.delete("/settings/smartboards/:id", deleteSmartboard);
 router.get("/announcements", getAnnouncementsForAdmin);
 router.post("/departments", createDepartment);
 router.post("/classes", createClass);

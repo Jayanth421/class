@@ -14,6 +14,10 @@ export default function SmartboardConnectPage() {
   const [error, setError] = useState("");
   const [startingSession, setStartingSession] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [manualAccessCode, setManualAccessCode] = useState("");
+  const [manualSmartboardName, setManualSmartboardName] = useState("Classroom Smartboard");
+  const [manualLoading, setManualLoading] = useState(false);
+  const [showHeroImage, setShowHeroImage] = useState(true);
 
   useEffect(() => {
     if (isAuthenticated && (role === "SMARTBOARD" || role === "FACULTY" || role === "ADMIN")) {
@@ -60,55 +64,43 @@ export default function SmartboardConnectPage() {
     }
   }, []);
 
+  // For this simplified Smartboard login UI we only expose manual access login (accessUser + accessKey)
+  // Do not auto-start QR session or polling in this view.
   useEffect(() => {
-    startSession();
-  }, [startSession]);
+    // intentionally empty - QR flow disabled for simplified UI
+    return undefined;
+  }, []);
 
-  useEffect(() => {
-    if (!session?.expiresAt) return undefined;
-    const tick = () => {
-      const nextSeconds = Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000);
-      setSecondsLeft(Math.max(nextSeconds, 0));
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [session?.expiresAt]);
+  const loginWithSmartboardAccessKey = async () => {
+    setManualLoading(true);
+    setError("");
+    setStatus("Logging in with smartboard access code...");
 
-  useEffect(() => {
-    if (!session?.expiresAt || secondsLeft > 0 || startingSession) return;
-    startSession();
-  }, [secondsLeft, session?.expiresAt, startingSession, startSession]);
+    // validate 4-digit code
+    if (!/^\d{4}$/.test(manualAccessCode)) {
+      setError("Please enter a 4-digit access code");
+      setManualLoading(false);
+      return;
+    }
 
-  useEffect(() => {
-    if (!session?.sessionToken) return undefined;
-    let polling = false;
+    try {
+      const response = await api.post("/auth/smartboard/access-login", {
+        accessUser: "",
+        accessKey: manualAccessCode,
+        smartboardName: manualSmartboardName
+      });
 
-    const interval = setInterval(async () => {
-      if (polling) return;
-      polling = true;
-      try {
-        const response = await api.post("/auth/smartboard/exchange", {
-          sessionToken: session.sessionToken
-        });
-        if (response.data?.status === "AUTHORIZED") {
-          completeSmartboardLogin(response.data, session);
-        }
-      } catch (requestError) {
-        const code = requestError?.response?.status;
-        if (code === 410) {
-          setStatus("QR expired. Regenerating...");
-          await startSession();
-        } else if (code && code !== 401 && code !== 404) {
-          setError(requestError?.response?.data?.message || "Smartboard polling failed");
-        }
-      } finally {
-        polling = false;
-      }
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [completeSmartboardLogin, session, startSession]);
+      completeSmartboardLogin(response.data, {
+        sessionToken: response.data.sessionToken,
+        smartboardName: manualSmartboardName
+      });
+    } catch (requestError) {
+      setError(requestError?.response?.data?.message || "Manual smartboard login failed.");
+      setStatus("Smartboard access login failed.");
+    } finally {
+      setManualLoading(false);
+    }
+  };
 
   const expiresInLabel = useMemo(() => {
     if (!session?.expiresAt) return "Waiting for QR...";
@@ -117,69 +109,62 @@ export default function SmartboardConnectPage() {
   }, [secondsLeft, session?.expiresAt]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#CFCFCF] via-[#CFCFCF] to-[#CFCFCF] px-4 py-6 text-[#141414]">
-      <div className="pointer-events-none absolute -left-20 bottom-0 h-72 w-72 rounded-full bg-white/75 blur-2xl" />
-      <div className="pointer-events-none absolute -right-20 bottom-8 h-80 w-80 rounded-full bg-white/70 blur-2xl" />
-      <div className="pointer-events-none absolute left-1/2 top-14 h-40 w-40 -translate-x-1/2 rounded-full bg-white/35 blur-3xl" />
-
-      <div className="mx-auto w-full max-w-md">
-        <aside className="rounded-3xl border border-white/60 bg-white/45 p-4 shadow-[0_22px_54px_rgba(20, 20, 20, 0.25)] backdrop-blur-xl lg:p-5">
-          <h1 className="text-center text-2xl font-semibold tracking-tight text-[#141414]">
-            Smartboard Camera Login
-          </h1>
-          <p className="mt-1.5 text-center text-xs text-[#141414]">
-            Scan this QR code using faculty mobile camera to open the smartboard.
-          </p>
-
-          <div className="mt-3 rounded-2xl border border-white/70 bg-white/55 p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#141414]">
-              Waiting for Camera Scan
-            </p>
-            <div className="mt-2 overflow-hidden rounded-xl border border-white/75 bg-white p-2">
-              {session?.qrDataUrl ? (
-                <div
-                  key={session?.sessionToken || "qr"}
-                  className="content-fade-in relative mx-auto aspect-square w-full max-w-[320px]"
-                >
-                  <img
-                    src={session.qrDataUrl}
-                    alt="Smartboard QR login"
-                    className="h-full w-full rounded-lg object-contain"
-                  />
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <div className="rounded-full bg-white p-1.5 shadow-[0_4px_16px_rgba(20, 20, 20, 0.2)]">
-                      <img
-                        src="/auth-assets/logo.jpg"
-                        alt="CMR logo"
-                        className="h-10 w-10 rounded-full object-cover"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex aspect-square w-full max-w-[320px] items-center justify-center text-xs text-[#CFCFCF]">
-                  Preparing QR...
-                </div>
-              )}
-            </div>
-
-            <div className="mt-2.5 flex items-center justify-between gap-2">
-              <p className="text-xs text-[#141414]">{expiresInLabel}</p>
-              <button
-                type="button"
-                onClick={startSession}
-                disabled={startingSession}
-                className="rounded-xl border border-[#CFCFCF] bg-white/80 px-3 py-2 text-xs font-semibold text-[#141414] transition hover:bg-white disabled:opacity-60"
-              >
-                {startingSession ? "Generating..." : "Regenerate QR"}
-              </button>
+    <div className="min-h-screen bg-[#EAF7E7] flex items-center justify-center p-4">
+      <div className="mx-auto w-full max-w-[1100px] rounded-xl shadow-[0_22px_54px_rgba(0,0,0,0.15)] overflow-hidden bg-white flex flex-col lg:flex-row">
+        {/* Left hero area (illustration) */}
+        {showHeroImage ? (
+          <div className="hidden lg:block lg:w-1/2 bg-gradient-to-b from-[#dff3d9] to-[#c9f0c4] p-10 flex items-center justify-center">
+            <div className="w-full max-w-[520px] rounded-xl overflow-hidden bg-transparent p-4 flex items-center justify-center">
+              <img src="/auth-assets/smartboard-hero.png" alt="Smartboard" className="max-w-full h-auto object-contain rounded-lg shadow" />
             </div>
           </div>
+        ) : (
+          <div className="hidden lg:block lg:w-1/2 bg-gradient-to-b from-[#dff3d9] to-[#c9f0c4] p-10" />
+        )}
 
-          {status ? <p className="mt-3 text-xs text-[#141414]">{status}</p> : null}
-          {error ? <p className="mt-2 text-xs text-[#7f1d1d]">{error}</p> : null}
-         
-        </aside>
+        {/* Right card - login form */}
+        <div className="w-full lg:w-1/2 p-8">
+          <div className="max-w-md mx-auto">
+            <div className="text-center">
+              <img src="/auth-assets/logo.jpg" alt="logo" className="mx-auto h-10 w-10 rounded-full object-cover" />
+              <h1 className="mt-4 text-3xl font-bold text-[#141414]">Smartboard Login</h1>
+              <p className="mt-2 text-sm text-slate-600">Sign in to the smartboard using the 4-digit access code provided by admin.</p>
+            </div>
+
+            <form className="mt-6 space-y-4" onSubmit={(e) => { e.preventDefault(); loginWithSmartboardAccessKey(); }}>
+              <input
+                type="text"
+                value={manualAccessCode}
+                onChange={(event) => setManualAccessCode((event.target.value || "").replace(/\D/g, "").slice(0,4))}
+                placeholder="Access code (4 digits)"
+                className="w-full rounded-full border border-gray-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-300"
+                required
+              />
+
+              <button
+                type="submit"
+                disabled={manualLoading}
+                className="w-full rounded-full bg-green-500 px-4 py-3 text-sm font-semibold text-white hover:bg-green-600 disabled:opacity-60"
+              >
+                {manualLoading ? "Signing in..." : "Sign in"}
+              </button>
+
+              {/* Toggle illustration button */}
+              <button
+                type="button"
+                onClick={() => setShowHeroImage((v) => !v)}
+                className="w-full mt-2 rounded-full border border-green-500 px-4 py-3 text-sm font-semibold text-green-600 hover:bg-green-50"
+              >
+                {showHeroImage ? "Hide illustration" : "Show illustration"}
+              </button>
+
+              <p className="mt-4 text-center text-xs text-slate-500">Or use QR login from the Smartboard Connect screen</p>
+            </form>
+
+            {status ? <p className="mt-4 text-sm text-green-700">{status}</p> : null}
+            {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -4,7 +4,6 @@
 # Local environment and secrets
 **/.env
 **/.env.local
-**/.env.aws
 
 # Archives
 *.zip

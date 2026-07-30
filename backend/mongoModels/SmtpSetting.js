@@ -13,11 +13,10 @@ const smtpSettingSchema = new mongoose.Schema(
     },
     host: {
       type: String,
-      required: true
+      default: ""
     },
     port: {
       type: Number,
-      required: true,
       default: 587
     },
     secure: {
@@ -34,15 +33,19 @@ const smtpSettingSchema = new mongoose.Schema(
     },
     user: {
       type: String,
-      required: true
+      default: ""
     },
     pass: {
       type: String,
-      required: true
+      default: ""
+    },
+    apiKey: {
+      type: String,
+      default: ""
     },
     from: {
       type: String,
-      required: true
+      default: ""
     },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
