@@ -4,6 +4,7 @@
 # Local environment and secrets
 **/.env
 **/.env.local
+**/.env.example
 
 # Archives
 *.zip

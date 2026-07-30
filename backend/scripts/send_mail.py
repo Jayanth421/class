@@ -69,6 +69,63 @@ def main():
     starttls = as_bool(smtp.get("starttls"), default=True)
     timeout_seconds = int(smtp.get("timeoutSeconds") or 20)
 
+    provider = str(smtp.get("provider") or "").strip().lower()
+    api_key = str(smtp.get("apiKey") or smtp.get("api_key") or "").strip()
+
+    # If configured to use Resend (either provider=resend or apiKey present), use Resend API
+    if provider == "resend" or api_key:
+        try:
+            # Prepare payload
+            to_list = []
+            to_field = message.get("to")
+            if isinstance(to_field, list):
+                to_list = to_field
+            else:
+                to_list = [s.strip() for s in str(to_field).split(",") if s.strip()]
+
+            resend_payload = {
+                "from": message.get("from"),
+                "to": to_list,
+                "subject": message.get("subject"),
+                "html": message.get("html") or message.get("text") or "",
+                "text": message.get("text") or "",
+            }
+
+            import urllib.request
+            import urllib.error
+
+            req = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=json.dumps(resend_payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                    "User-Agent": "cmr-python-mailer/1.0",
+                },
+                method="POST",
+            )
+
+            with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
+                resp_body = resp.read().decode("utf-8")
+                try:
+                    parsed = json.loads(resp_body or "{}")
+                except Exception:
+                    parsed = {}
+
+                # Resend returns 200/202 with id in response
+                print(json.dumps({"ok": True, "id": parsed.get("id") or parsed.get("message_id") or None}))
+                return
+        except urllib.error.HTTPError as he:
+            try:
+                err_body = he.read().decode("utf-8")
+                err_json = json.loads(err_body or "{}")
+                fail(str(err_json.get("error") or err_json.get("message") or err_body))
+            except Exception:
+                fail(str(he))
+        except Exception as exc:
+            fail(str(exc))
+
+    # Fallback: use regular SMTP sending
     try:
         if secure:
             with smtplib.SMTP_SSL(
