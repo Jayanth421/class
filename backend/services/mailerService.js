@@ -31,8 +31,22 @@ function getMailProvider() {
   return String(process.env.MAIL_PROVIDER || "resend").trim().toLowerCase();
 }
 
-function getEnvSmtpConfig() {
+function isResendConfigured(config) {
+  return Boolean(String(config?.apiKey || "").trim()) && Boolean(String(config?.from || "").trim());
+}
+
+function normalizeMailConfig(config) {
+  const baseProvider = String(config?.provider || "").trim().toLowerCase();
+  const provider = baseProvider === "resend" || isResendConfigured(config) ? "resend" : baseProvider;
+
   return {
+    ...config,
+    provider
+  };
+}
+
+function getEnvSmtpConfig() {
+  return normalizeMailConfig({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
     secure: toBool(process.env.SMTP_SECURE, false),
@@ -43,13 +57,13 @@ function getEnvSmtpConfig() {
     starttls: toBool(process.env.SMTP_STARTTLS, true),
     timeoutSeconds: Number(process.env.SMTP_TIMEOUT_SECONDS || 20),
     provider: getMailProvider()
-  };
+  });
 }
 
 function mergeSmtpConfig(baseConfig, overrideConfig = null) {
-  if (!overrideConfig) return baseConfig;
+  if (!overrideConfig) return normalizeMailConfig(baseConfig);
 
-  return {
+  return normalizeMailConfig({
     ...baseConfig,
     ...overrideConfig,
     port: Number(overrideConfig.port ?? baseConfig.port),
@@ -65,7 +79,7 @@ function mergeSmtpConfig(baseConfig, overrideConfig = null) {
     provider: String(overrideConfig.provider || baseConfig.provider || "node")
       .trim()
       .toLowerCase()
-  };
+  });
 }
 
 function getSmtpConfig(overrideConfig = null) {
@@ -104,14 +118,16 @@ async function getActiveSmtpConfig(overrideConfig = null) {
 }
 
 function assertSmtpConfig(config) {
-  if (config.provider === "resend") {
-    if (!config.apiKey || !config.from) {
+  const normalizedConfig = normalizeMailConfig(config);
+
+  if (normalizedConfig.provider === "resend" || isResendConfigured(normalizedConfig)) {
+    if (!normalizedConfig.apiKey || !normalizedConfig.from) {
       throw new ApiError(500, "Resend API key and from address are required");
     }
     return;
   }
 
-  if (!config.host || !config.port || !config.user || !config.pass || !config.from) {
+  if (!normalizedConfig.host || !normalizedConfig.port || !normalizedConfig.user || !normalizedConfig.pass || !normalizedConfig.from) {
     throw new ApiError(500, "SMTP configuration is incomplete");
   }
 }
@@ -258,20 +274,21 @@ async function sendWithResend(payload, smtpConfigOverride = null) {
 async function sendMail({ to, subject, text, html, smtpConfig = null }) {
   const smtpConfigOverride = smtpConfig;
   const effectiveSmtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
+  const normalizedConfig = normalizeMailConfig(effectiveSmtpConfig);
   const payload = {
-    from: effectiveSmtpConfig.from,
+    from: normalizedConfig.from,
     to,
     subject,
     text,
     html
   };
 
-  if (effectiveSmtpConfig.provider === "python") {
-    return sendWithPythonMailer(payload, effectiveSmtpConfig);
+  if (normalizedConfig.provider === "resend" || isResendConfigured(normalizedConfig)) {
+    return sendWithResend(payload, normalizedConfig);
   }
 
-  if (effectiveSmtpConfig.provider === "resend") {
-    return sendWithResend(payload, effectiveSmtpConfig);
+  if (normalizedConfig.provider === "python") {
+    return sendWithPythonMailer(payload, normalizedConfig);
   }
 
   const smtp = await getTransporter(smtpConfigOverride);
