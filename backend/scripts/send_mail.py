@@ -126,32 +126,64 @@ def main():
             fail(str(exc))
 
     # Fallback: use regular SMTP sending
-    try:
-        if secure:
-            with smtplib.SMTP_SSL(
-                host, port, timeout=timeout_seconds, context=ssl.create_default_context()
-            ) as server:
+    # Robust SMTP sending with retries for transient socket errors
+    max_retries = int(smtp.get("maxRetries") or 3)
+    backoff_base = float(smtp.get("retryBackoffSeconds") or 1.0)
+
+    def send_via_smtp(use_ssl):
+        if use_ssl:
+            ctx = ssl.create_default_context()
+            with smtplib.SMTP_SSL(host, port, timeout=timeout_seconds, context=ctx) as server:
                 server.login(username, password)
-                rejected = server.send_message(email)
+                return server.send_message(email)
         else:
             with smtplib.SMTP(host, port, timeout=timeout_seconds) as server:
                 server.ehlo()
                 if starttls:
-                    server.starttls(context=ssl.create_default_context())
-                    server.ehlo()
+                    try:
+                        server.starttls(context=ssl.create_default_context())
+                        server.ehlo()
+                    except Exception:
+                        # If STARTTLS fails, continue without it and let login attempt fail/ret
+                        pass
                 server.login(username, password)
-                rejected = server.send_message(email)
-    except Exception as exc:
-        fail(str(exc))
+                return server.send_message(email)
 
-    print(
-        json.dumps(
-            {
-                "ok": True,
-                "rejected": sorted(list((rejected or {}).keys())),
-            }
-        )
-    )
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            rejected = send_via_smtp(secure)
+            # Success
+            print(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "rejected": sorted(list((rejected or {}).keys())),
+                    }
+                )
+            )
+            return
+        except (smtplib.SMTPServerDisconnected, ConnectionResetError, BrokenPipeError) as exc:
+            last_exc = exc
+            if attempt >= max_retries:
+                fail(f"Transient socket error after {attempt} attempts: {str(exc)}")
+            # exponential backoff
+            time.sleep(backoff_base * (2 ** (attempt - 1)))
+            continue
+        except smtplib.SMTPException as exc:
+            # Non-transient SMTP errors - surface immediately
+            fail(str(exc))
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= max_retries:
+                fail(str(exc))
+            time.sleep(backoff_base * (2 ** (attempt - 1)))
+
+    # If we exit loop without returning, report last exception
+    if last_exc:
+        fail(str(last_exc))
+    else:
+        fail("Unknown error sending email via SMTP")
 
 
 if __name__ == "__main__":
