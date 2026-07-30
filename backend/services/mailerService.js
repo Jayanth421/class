@@ -1,244 +1,64 @@
-﻿const nodemailer = require("nodemailer");
-const path = require("path");
-const https = require("https");
-const { spawn } = require("child_process");
-const mongoose = require("mongoose");
-const SmtpSetting = require("../mongoModels/SmtpSetting");
+﻿const https = require("https");
 const ApiError = require("../utils/apiError");
 
-let transporter;
-let transporterSignature = "";
-
-function toBool(value, defaultValue = false) {
-  if (value === undefined || value === null) return defaultValue;
-  return String(value).toLowerCase() === "true";
+function getResendApiKey() {
+  return String(process.env.RESEND_API_KEY || "").trim();
 }
 
-function isPlaceholderValue(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return (
-    !normalized ||
-    normalized === "example.com" ||
-    normalized === "smtp.example.com" ||
-    normalized === "your_smtp_user" ||
-    normalized === "your_smtp_password" ||
-    normalized.includes("replace_with") ||
-    normalized.includes("<")
-  );
+function getResendFromAddress() {
+  return String(process.env.RESEND_FROM || process.env.SMTP_FROM || "").trim();
 }
 
-function getMailProvider() {
-  // Default to 'resend' so the application uses Resend as the primary provider
-  return String(process.env.MAIL_PROVIDER || "resend").trim().toLowerCase();
+function normalizeEmailList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => String(entry || "").trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
-function isResendConfigured(config) {
-  return Boolean(String(config?.apiKey || "").trim()) && Boolean(String(config?.from || "").trim());
-}
+function resolveMailConfig(overrideConfig = null) {
+  const baseConfig = {
+    apiKey: getResendApiKey(),
+    from: getResendFromAddress()
+  };
 
-function normalizeMailConfig(config) {
-  const baseProvider = String(config?.provider || "").trim().toLowerCase();
-  const provider = baseProvider === "resend" || isResendConfigured(config) ? "resend" : baseProvider;
+  if (!overrideConfig) {
+    return baseConfig;
+  }
 
   return {
-    ...config,
-    provider
+    ...baseConfig,
+    ...overrideConfig,
+    apiKey: String(overrideConfig.apiKey || baseConfig.apiKey || "").trim(),
+    from: String(overrideConfig.from || baseConfig.from || "").trim()
   };
 }
 
-function getEnvSmtpConfig() {
-  return normalizeMailConfig({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: toBool(process.env.SMTP_SECURE, false),
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-    apiKey: process.env.RESEND_API_KEY || "",
-    from: process.env.RESEND_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || "",
-    starttls: toBool(process.env.SMTP_STARTTLS, true),
-    timeoutSeconds: Number(process.env.SMTP_TIMEOUT_SECONDS || 20),
-    provider: getMailProvider()
-  });
-}
-
-function mergeSmtpConfig(baseConfig, overrideConfig = null) {
-  if (!overrideConfig) return normalizeMailConfig(baseConfig);
-
-  return normalizeMailConfig({
-    ...baseConfig,
-    ...overrideConfig,
-    port: Number(overrideConfig.port ?? baseConfig.port),
-    secure:
-      overrideConfig.secure !== undefined
-        ? Boolean(overrideConfig.secure)
-        : baseConfig.secure,
-    starttls:
-      overrideConfig.starttls !== undefined
-        ? Boolean(overrideConfig.starttls)
-        : baseConfig.starttls,
-    timeoutSeconds: Number(overrideConfig.timeoutSeconds ?? baseConfig.timeoutSeconds),
-    provider: String(overrideConfig.provider || baseConfig.provider || "node")
-      .trim()
-      .toLowerCase()
-  });
-}
-
-function getSmtpConfig(overrideConfig = null) {
-  const baseConfig = getEnvSmtpConfig();
-  return mergeSmtpConfig(baseConfig, overrideConfig);
-}
-
-async function getActiveSmtpConfig(overrideConfig = null) {
-  const envConfig = getEnvSmtpConfig();
-  let storedConfig = null;
-
-  try {
-    if (mongoose.connection.readyState === 1) {
-      const saved = await SmtpSetting.findOne({ key: "default" }).lean().exec();
-      if (saved) {
-        storedConfig = {
-          provider: String(saved.provider || envConfig.provider || "node").trim().toLowerCase(),
-          host: String(saved.host || envConfig.host || "").trim(),
-          port: Number(saved.port || envConfig.port || 587),
-          secure: Boolean(saved.secure ?? envConfig.secure),
-          starttls: saved.starttls === undefined ? envConfig.starttls : Boolean(saved.starttls),
-          timeoutSeconds: Number(saved.timeoutSeconds || envConfig.timeoutSeconds || 20),
-          user: String(saved.user || envConfig.user || "").trim(),
-          pass: String(saved.pass || envConfig.pass || "").trim(),
-          apiKey: String(saved.apiKey || envConfig.apiKey || "").trim(),
-          from: String(saved.from || envConfig.from || "").trim()
-        };
+function assertResendConfig(config) {
+  if (!config.apiKey || !config.from) {
+    throw new ApiError(500, "Resend configuration is incomplete", {
+      missing: {
+        apiKey: !config.apiKey,
+        from: !config.from
       }
-    }
-  } catch (_error) {
-    storedConfig = null;
-  }
-
-  const baseConfig = storedConfig ? mergeSmtpConfig(envConfig, storedConfig) : envConfig;
-  return mergeSmtpConfig(baseConfig, overrideConfig);
-}
-
-function assertSmtpConfig(config) {
-  const normalizedConfig = normalizeMailConfig(config);
-
-  if (normalizedConfig.provider === "resend" || isResendConfigured(normalizedConfig)) {
-    if (!normalizedConfig.apiKey || !normalizedConfig.from) {
-      throw new ApiError(500, "Resend API key and from address are required");
-    }
-    return;
-  }
-
-  if (!normalizedConfig.host || !normalizedConfig.port || !normalizedConfig.user || !normalizedConfig.pass || !normalizedConfig.from) {
-    throw new ApiError(500, "SMTP configuration is incomplete");
+    });
   }
 }
 
-function buildTransporter(smtpConfig) {
-  return nodemailer.createTransport({
-    host: smtpConfig.host,
-    port: smtpConfig.port,
-    secure: smtpConfig.secure,
-    auth: {
-      user: smtpConfig.user,
-      pass: smtpConfig.pass
-    },
-    requireTLS: smtpConfig.starttls
-  });
-}
-
-async function getTransporter(smtpConfigOverride = null) {
-  const smtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
-  assertSmtpConfig(smtpConfig);
-
-  if (smtpConfigOverride) {
-    return buildTransporter(smtpConfig);
-  }
-
-  const signature = `${smtpConfig.host}:${smtpConfig.port}:${smtpConfig.user}:${smtpConfig.secure}:${smtpConfig.starttls}`;
-  if (!transporter || transporterSignature !== signature) {
-    transporter = buildTransporter(smtpConfig);
-    transporterSignature = signature;
-  }
-
-  return transporter;
-}
-
-async function sendWithPythonMailer(payload, smtpConfigOverride = null) {
-  const smtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
-  assertSmtpConfig(smtpConfig);
-
-  const pythonBin =
-    process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
-  const scriptPath =
-    process.env.PYTHON_MAIL_SCRIPT || path.join(__dirname, "..", "scripts", "send_mail.py");
-
+function postJson(url, headers, body) {
   return new Promise((resolve, reject) => {
-    const child = spawn(pythonBin, [scriptPath], {
-      stdio: ["pipe", "pipe", "pipe"]
-    });
+    const payload = JSON.stringify(body);
 
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    child.on("error", (error) => {
-      reject(
-        new ApiError(502, "Failed to execute Python mailer", {
-          error: error.message
-        })
-      );
-    });
-
-    child.on("close", (code) => {
-      if (code !== 0) {
-        reject(
-          new ApiError(502, "Python mailer exited with an error", {
-            stderr: (stderr || stdout || "").trim() || `exit_code_${code}`
-          })
-        );
-        return;
-      }
-
-      let parsed;
-      try {
-        parsed = JSON.parse((stdout || "").trim() || "{}");
-      } catch (error) {
-        reject(new ApiError(502, "Python mailer returned invalid JSON"));
-        return;
-      }
-
-      if (!parsed.ok) {
-        reject(
-          new ApiError(502, "Python mailer could not send email", {
-            error: parsed.error || "unknown_error"
-          })
-        );
-        return;
-      }
-
-      resolve(parsed);
-    });
-
-    child.stdin.write(
-      JSON.stringify({
-        smtp: smtpConfig,
-        message: payload
-      })
-    );
-    child.stdin.end();
-  });
-}
-
-function postToResend(url, headers, body) {
-  return new Promise((resolve, reject) => {
-    const requestBody = JSON.stringify(body);
     const req = https.request(
       url,
       {
@@ -246,18 +66,19 @@ function postToResend(url, headers, body) {
         headers: {
           ...headers,
           "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(requestBody)
+          "Content-Length": Buffer.byteLength(payload)
         }
       },
       (res) => {
         let responseBody = "";
+        res.setEncoding("utf8");
         res.on("data", (chunk) => {
-          responseBody += chunk.toString("utf8");
+          responseBody += chunk;
         });
         res.on("end", () => {
           let parsed = null;
           try {
-            parsed = JSON.parse(responseBody || "{}")
+            parsed = JSON.parse(responseBody || "{}");
           } catch (_error) {
             parsed = null;
           }
@@ -272,18 +93,23 @@ function postToResend(url, headers, body) {
     );
 
     req.on("error", reject);
-    req.write(requestBody);
+    req.write(payload);
     req.end();
   });
 }
 
 async function sendWithResend(payload, smtpConfigOverride = null) {
-  const smtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
-  assertSmtpConfig(smtpConfig);
+  const config = resolveMailConfig(smtpConfigOverride);
+  assertResendConfig(config);
 
-  const requestBody = {
-    from: smtpConfig.from,
-    to: Array.isArray(payload.to) ? payload.to : [payload.to],
+  const recipients = normalizeEmailList(payload.to);
+  if (!recipients.length) {
+    throw new ApiError(400, "At least one recipient email is required");
+  }
+
+  const body = {
+    from: config.from,
+    to: recipients,
     subject: payload.subject,
     html: payload.html || payload.text || "",
     text: payload.text || ""
@@ -291,12 +117,12 @@ async function sendWithResend(payload, smtpConfigOverride = null) {
 
   let response;
   try {
-    response = await postToResend(
+    response = await postJson(
       "https://api.resend.com/emails",
       {
-        Authorization: `Bearer ${smtpConfig.apiKey}`
+        Authorization: `Bearer ${config.apiKey}`
       },
-      requestBody
+      body
     );
   } catch (error) {
     throw new ApiError(502, "Failed to send email via Resend", {
@@ -312,33 +138,23 @@ async function sendWithResend(payload, smtpConfigOverride = null) {
     });
   }
 
-  return { ok: true, id: response.parsed?.id || response.parsed?.message_id || null };
+  return {
+    ok: true,
+    id: response.parsed?.id || response.parsed?.message_id || null
+  };
 }
+
 async function sendMail({ to, subject, text, html, smtpConfig = null }) {
-  const smtpConfigOverride = smtpConfig;
-  const effectiveSmtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
-  const normalizedConfig = normalizeMailConfig(effectiveSmtpConfig);
   const payload = {
-    from: normalizedConfig.from,
     to,
     subject,
     text,
     html
   };
 
-  if (normalizedConfig.provider === "resend" || isResendConfigured(normalizedConfig)) {
-    return sendWithResend(payload, normalizedConfig);
-  }
-
-  if (normalizedConfig.provider === "python") {
-    return sendWithPythonMailer(payload, normalizedConfig);
-  }
-
-  const smtp = await getTransporter(smtpConfigOverride);
-  return smtp.sendMail(payload);
+  return sendWithResend(payload, smtpConfig);
 }
 
 module.exports = {
   sendMail
 };
-
