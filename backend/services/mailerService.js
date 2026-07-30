@@ -1,4 +1,4 @@
-const nodemailer = require("nodemailer");
+﻿const nodemailer = require("nodemailer");
 const path = require("path");
 const { spawn } = require("child_process");
 const mongoose = require("mongoose");
@@ -232,8 +232,8 @@ async function sendWithResend(payload, smtpConfigOverride = null) {
       from: smtpConfig.from,
       to: Array.isArray(payload.to) ? payload.to : [payload.to],
       subject: payload.subject,
-      text: payload.text || "",
-      html: payload.html || ""
+      html: payload.html || payload.text || "",
+      text: payload.text || ""
     })
   });
 
@@ -245,16 +245,15 @@ async function sendWithResend(payload, smtpConfigOverride = null) {
   }
 
   if (!response.ok) {
-    const detail = parsed?.message || "Resend API request failed";
+    const detail = parsed?.error?.message || parsed?.message || "Resend API request failed";
     throw new ApiError(502, "Failed to send email via Resend", {
       status: response.status,
       detail
     });
   }
 
-  return { ok: true, id: parsed?.id || null };
+  return { ok: true, id: parsed?.id || parsed?.message_id || null };
 }
-
 async function sendMail({ to, subject, text, html, smtpConfig = null }) {
   const smtpConfigOverride = smtpConfig;
   const effectiveSmtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
@@ -281,3 +280,4 @@ async function sendMail({ to, subject, text, html, smtpConfig = null }) {
 module.exports = {
   sendMail
 };
+
