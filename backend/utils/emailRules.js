@@ -1,6 +1,6 @@
 const { ROLES } = require("../config/constants");
 
-const studentEmailRegex = /^(2[1-5])h51[a-z][a-z0-9]{4}@cmrcet\.ac\.in$/i
+const studentEmailRegex = /^(2[1-9])h5[1-5][a-z]\d{4}@cmrcet\.ac\.in$/i
 const facultyEmailRegex = /^(?!\d+@)[a-z][a-z0-9._-]*@cmrcet\.ac\.in$/i;
 const genericEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
