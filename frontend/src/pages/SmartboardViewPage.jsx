@@ -174,6 +174,39 @@ export default function SmartboardViewPage() {
     return getClassLabel(selectedClass);
   }, [selectedClass, selectedClassId]);
 
+  const subjectsByFaculty = useMemo(() => {
+    const grouped = new Map();
+    (subjects || []).forEach((subject) => {
+      const facultyId = subject?.facultyId || subject?.faculty?.id;
+      if (!facultyId) return;
+      if (!grouped.has(String(facultyId))) grouped.set(String(facultyId), []);
+      grouped.get(String(facultyId)).push(subject);
+    });
+
+    grouped.forEach((rows) => {
+      rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" }));
+    });
+
+    return grouped;
+  }, [subjects]);
+
+  const visibleSubjectsByFaculty = useMemo(() => {
+    const grouped = new Map();
+    (facultyList || []).forEach((faculty) => {
+      const facultyId = String(faculty?.id || "");
+      if (!facultyId) return;
+
+      let rows = subjectsByFaculty.get(facultyId) || [];
+      if (String(selectedClassId) !== ALL_CLASSES_KEY && selectedClass?.id) {
+        rows = rows.filter((subject) => String(subject.classId || "") === String(selectedClass.id));
+      }
+
+      grouped.set(facultyId, rows);
+    });
+
+    return grouped;
+  }, [facultyList, selectedClass, selectedClassId, subjectsByFaculty]);
+
   const selectedClassPresentations = useMemo(
     () => {
       const source = String(selectedClassId) === ALL_CLASSES_KEY
@@ -269,234 +302,141 @@ export default function SmartboardViewPage() {
   }, [selectedClassPresentations]);
 
   return (
-    <div className="h-full overflow-auto bg-[#141414] p-3 text-white lg:p-4">
-      <section className="mx-auto w-full max-w-[1700px] space-y-3 xl:w-[75%] 2xl:w-[75%]">
-        <header className="rounded-3xl border border-white/10 bg-gradient-to-r from-[#141414] via-[#141414] to-[#141414] p-3 shadow-[0_20px_60px_rgba(20, 20, 20, 0.35)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="font-display text-2xl text-white lg:text-3xl">Smart Classroom Board</h1>
-              <p className="mt-1 text-xs text-slate-200">
-                Click class, open student PPT, and write between slides with pen.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={loadLibrary}
-              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
-            >
-              Refresh
-            </button>
-          </div>
-        </header>
+    <div className="relative h-full overflow-auto bg-[#f8fafc] p-6 text-slate-900">
+      {/* Subtle animated background blobs (light colours) */}
+      <div className="absolute inset-0 pointer-events-none">
+        <style>{`\n          @keyframes floaty {\n            0% { transform: translateY(0) scale(1); }\n            50% { transform: translateY(-24px) scale(1.04); }\n            100% { transform: translateY(0) scale(1); }\n          }\n          .animate-floaty { animation: floaty 9s ease-in-out infinite; }\n          .animate-floaty-delayed { animation: floaty 12s ease-in-out infinite 2s; }\n        `}</style>
 
-        <div className="grid gap-3 xl:grid-cols-[270px_1fr]">
-          <aside className="rounded-3xl border border-white/10 bg-[#141414] p-2.5">
-            <div className="rounded-2xl border border-white/12 bg-white/10 p-2">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-300">Class</p>
-              <p className="mt-1 text-sm font-semibold text-white">{selectedClassLabel}</p>
-              <p className="text-[11px] text-slate-200">{selectedClassSubtitle}</p>
+        <div className="absolute -left-24 -top-12 w-80 h-80 rounded-full bg-gradient-to-br from-pink-100 via-purple-100 to-transparent opacity-40 blur-3xl animate-floaty" />
+        <div className="absolute right-8 -bottom-12 w-64 h-64 rounded-full bg-gradient-to-br from-blue-100 via-teal-100 to-transparent opacity-30 blur-2xl animate-floaty-delayed" />
+      </div>
+
+      <section className="relative z-10 mx-auto w-full max-w-[1400px]">
+        <div className="grid grid-cols-[260px_1fr] gap-6">
+
+          {/* Left sidebar: Departments / Faculty */}
+          <aside className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-800">Departments</h3>
+              <button className="text-xs text-slate-500">Filter</button>
             </div>
- 
-            <div className="mt-2.5">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-300">Class View Cards</p>
-              <div className="mt-2 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => chooseClass(ALL_CLASSES_KEY)}
-                  className={`w-full rounded-xl border px-2.5 py-2 text-left transition ${
-                    String(selectedClassId) === ALL_CLASSES_KEY
-                      ? "border-brand-300 bg-brand-500/20"
-                      : "border-white/15 bg-white/5 hover:bg-white/10"
-                  }`}
-                >
-                  <p className="text-sm font-semibold text-white">All Classes</p>
-                  <p className="mt-1 text-[11px] text-slate-200">Show every uploaded PPT card</p>
-                </button>
- 
-                <div className="pt-2">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-300">Class List</p>
-                  <div className="mt-2 space-y-1">
-                    {classes.map((item) => {
-                      const active = String(item.id) === String(selectedClassId);
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => chooseClass(item.id)}
-                          className={`w-full rounded-xl border px-2.5 py-2 text-left transition ${
-                            active
-                              ? "border-brand-300 bg-brand-500/20"
-                              : "border-white/15 bg-white/5 hover:bg-white/10"
-                          }`}
-                        >
-                          <p className="text-sm font-semibold text-white">{getClassLabel(item)}</p>
-                          <p className="mt-1 text-[11px] text-slate-200">
-                            {item.year ? `Year ${item.year}` : "Year N/A"} | {item.section || "Section N/A"}
+
+            <div className="mt-3">
+              <input
+                placeholder="Filter faculty..."
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400"
+              />
+            </div>
+
+            <div className="mt-3 space-y-3">
+              {/* Faculty cards */}
+              {facultyList.map((f) => {
+                const active = String(f.id) === String(selectedFacultyId);
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => chooseFaculty(f.id)}
+                    className={`w-full flex items-center gap-3 rounded-md p-2 transition ${
+                      active ? 'bg-violet-100 border border-violet-300' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <img
+                      src={f.avatarUrl || '/auth-assets/people-svgrepo-com.svg'}
+                      alt={f.name}
+                      className="h-10 w-10 rounded-full object-cover"
+                    />
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-slate-800">{f.name || 'Faculty'}</p>
+                      <p className="text-xs text-slate-500">{f.department || f.departmentCode || ''}</p>
+                      {(() => {
+                        const subjects = visibleSubjectsByFaculty.get(String(f.id)) || [];
+                        if (!subjects.length) return null;
+                        return (
+                          <p className="mt-1 text-[11px] text-violet-600">
+                            {subjects.slice(0, 2).map((subject) => subject.name || 'Subject').join(' • ')}
+                            {subjects.length > 2 ? '' : ''}
                           </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
- 
-                <div className="pt-2">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-300">Faculty List</p>
-                  <div className="mt-2 space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => chooseFaculty("")}
-                      className={`w-full rounded-xl border px-2.5 py-2 text-left transition ${
-                        !selectedFacultyId
-                          ? "border-brand-300 bg-brand-500/20"
-                          : "border-white/15 bg-white/5 hover:bg-white/10"
-                      }`}
-                    >
-                      <p className="text-sm font-semibold text-white">All Faculty</p>
-                    </button>
-                    {facultyList.map((f) => {
-                      const active = String(f.id) === String(selectedFacultyId);
-                      return (
-                        <button
-                          key={f.id}
-                          type="button"
-                          onClick={() => chooseFaculty(f.id)}
-                          className={`w-full rounded-xl border px-2.5 py-2 text-left transition ${
-                            active
-                              ? "border-brand-300 bg-brand-500/20"
-                              : "border-white/15 bg-white/5 hover:bg-white/10"
-                          }`}
-                        >
-                          <p className="text-sm font-semibold text-white">{f.name || "Faculty"}</p>
-                          <p className="mt-1 text-[11px] text-slate-200">{f.email || ""}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                        );
+                      })()}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
 
-               </div>
-             </div>
-           </aside>
+            
 
-          <main className="space-y-2.5 rounded-3xl border border-white/10 bg-[#141414] p-2.5">
-            <div className="rounded-2xl border border-white/12 bg-white/5 p-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-300">Class</p>
-                  <h2 className="text-xl font-semibold text-white">{selectedClassLabel}</h2>
-                </div>
-                <p className="text-xs text-slate-200">{selectedClassSummaryText}</p>
-              </div>
+            <div className="mt-6 pt-4 border-t border-slate-100 space-y-2 text-sm">
+              <button className="w-full text-left text-slate-600">Help Center</button>
+            </div>
+          </aside>
 
-              <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {selectedClassPresentations.map((ppt) => {
-                  const active = String(selectedPresentationId) === String(ppt.id);
-                  return (
-                    <button
-                      key={ppt.id}
-                      type="button"
-                      onClick={() => openPresentation(ppt)}
-                      className={`group rounded-xl border text-left transition ${
-                        active
-                          ? "border-brand-300 bg-brand-500/20"
-                          : "border-white/20 bg-white/10 hover:bg-white/20"
-                      }`}
-                    >
-                      <div className="flex aspect-video items-center justify-center rounded-t-xl bg-gradient-to-br from-[#141414] to-[#141414]">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-white/15 text-base text-white transition group-hover:scale-105">
-                          &gt;
-                        </span>
-                      </div>
-                      <div className="p-2">
-                        <p className="line-clamp-2 text-xs font-semibold text-white">
-                          {ppt.title || ppt.fileName || "Presentation"}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-200">
-                          {ppt.rollNumber || ppt.uploadedByName || "Student Upload"}
-                        </p>
-                        <p className="mt-1 text-[10px] text-slate-300">
-                          Uploaded: {formatDateTime(ppt.uploadedAt)}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
- 
-              <div className="mt-3 rounded-2xl border border-white/12 bg-white/5 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-300">Student Names</p>
-                  <p className="text-[11px] text-slate-400">
-                    {selectedFacultyId ? "Filtered by faculty" : "All students"}
-                  </p>
-                </div>
-                {studentList.length ? (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {studentList.map((student) => (
-                      <div
-                        key={student.id}
-                        className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm text-white"
-                      >
-                        {student.label}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm text-slate-200">No student names found for this selection.</p>
-                )}
-              </div>
- 
-              {!loading &&
-              (selectedClass || String(selectedClassId) === ALL_CLASSES_KEY) &&
-              selectedClassPresentations.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-200">
-                  No student PPT cards found for this class.
+          {/* Main content */}
+          <main>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">
+                  {(facultyList.find(f=>String(f.id)===String(selectedFacultyId)) || faculty)?.department || ''}
+                  {((facultyList.find(f=>String(f.id)===String(selectedFacultyId)) || faculty)?.name) ? ' > ' : ''}
+                  {(facultyList.find(f=>String(f.id)===String(selectedFacultyId)) || faculty)?.name || ''}
                 </p>
+                <h1 className="mt-2 text-2xl font-bold text-slate-900">Students Presentations</h1>
+              </div>
+
+             
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {selectedClassPresentations.map((ppt) => (
+                <div key={ppt.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <div className="relative">
+                    <img src={ppt.thumbnailUrl || '/auth-assets/images.png'} alt={ppt.title || ppt.fileName} className="h-40 w-full rounded-t-lg object-cover" />
+                    {ppt.isNew ? (
+                      <span className="absolute top-2 right-2 rounded-full bg-blue-600 px-2 py-1 text-xs text-white">NEW</span>
+                    ) : null}
+                  </div>
+                  <div className="p-4">
+                    <p className="text-sm font-semibold text-slate-900 line-clamp-2">{ppt.title || ppt.fileName || 'Untitled'}</p>
+                    <p className="mt-2 text-xs text-slate-500 h-12 overflow-hidden text-ellipsis">{ppt.description || ppt.summary || ''}</p>
+
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z"/></svg>
+                        <span>{(ppt.slidesCount || ppt.slideCount || '—') + ' Slides'}</span>
+                      </div>
+                      <button onClick={() => openPresentation(ppt)} className="text-sm font-semibold text-violet-600">View Deck →</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {selectedClassPresentations.length === 0 && !loading ? (
+                <p className="text-sm text-slate-500">No presentations available for this selection.</p>
               ) : null}
             </div>
 
-            <div className="rounded-2xl border border-white/12 bg-[#141414] p-2.5 text-[11px] text-slate-300">
-              Click any PPT card above to open it directly.
-            </div>
-          </main>
-        </div>
+            <div className="mt-6 text-sm text-slate-500">Click any card to preview the presentation.</div>
 
-        {loading ? <p className="text-[11px] text-slate-300">Loading smartboard data...</p> : null}
-        {status ? <p className="text-[11px] text-[#14532d]">{status}</p> : null}
-        {error ? <p className="text-[11px] text-[#7f1d1d]">{error}</p> : null}
-        
-          {/* Preview modal */}
-          {previewFileUrl ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-              <div className="relative mx-4 w-full max-w-5xl rounded-lg bg-white/5 p-2">
-                <div className="flex justify-end p-2">
-                  <button
-                    onClick={() => { setPreviewFileUrl(""); setPreviewFileType(""); }}
-                    className="rounded bg-white/10 px-3 py-1 text-sm text-white"
-                  >
-                    Close
-                  </button>
-                </div>
-                <div className="h-[70vh] w-full">
-                  {isOfficePresentation(previewFileUrl, previewFileType) ? (
-                    <iframe src={previewFileUrl} title="ppt-preview" className="h-full w-full" />
-                  ) : (
-                    <iframe src={previewFileUrl} title="file-preview" className="h-full w-full" />
-                  )}
+            {/* Preview modal (kept unchanged) */}
+            {previewFileUrl ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                <div className="relative mx-4 w-full max-w-6xl rounded-lg bg-white p-2">
+                  <div className="flex justify-end p-2">
+                    <button onClick={() => { setPreviewFileUrl(''); setPreviewFileType(''); }} className="rounded bg-slate-100 px-3 py-1 text-sm text-slate-700">Close</button>
+                  </div>
+                  <div className="h-[70vh] w-full">
+                    {isOfficePresentation(previewFileUrl, previewFileType) ? (
+                      <iframe src={previewFileUrl} title="ppt-preview" className="h-full w-full" />
+                    ) : (
+                      <iframe src={previewFileUrl} title="file-preview" className="h-full w-full" />
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          <div className="flex justify-center pt-1">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-2.5 py-1.5">
-            <img
-              src="/auth-assets/logo.jpg"
-              alt="CMR logo"
-              className="h-6 w-6 rounded-full object-cover"
-            />
-            <span className="text-[11px] font-semibold text-white">CMR Smartboard</span>
-          </div>
+          </main>
         </div>
       </section>
     </div>
