@@ -1,5 +1,6 @@
 ﻿const nodemailer = require("nodemailer");
 const path = require("path");
+const https = require("https");
 const { spawn } = require("child_process");
 const mongoose = require("mongoose");
 const SmtpSetting = require("../mongoModels/SmtpSetting");
@@ -235,41 +236,83 @@ async function sendWithPythonMailer(payload, smtpConfigOverride = null) {
   });
 }
 
+function postToResend(url, headers, body) {
+  return new Promise((resolve, reject) => {
+    const requestBody = JSON.stringify(body);
+    const req = https.request(
+      url,
+      {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(requestBody)
+        }
+      },
+      (res) => {
+        let responseBody = "";
+        res.on("data", (chunk) => {
+          responseBody += chunk.toString("utf8");
+        });
+        res.on("end", () => {
+          let parsed = null;
+          try {
+            parsed = JSON.parse(responseBody || "{}")
+          } catch (_error) {
+            parsed = null;
+          }
+
+          resolve({
+            statusCode: res.statusCode || 0,
+            body: responseBody,
+            parsed
+          });
+        });
+      }
+    );
+
+    req.on("error", reject);
+    req.write(requestBody);
+    req.end();
+  });
+}
+
 async function sendWithResend(payload, smtpConfigOverride = null) {
   const smtpConfig = await getActiveSmtpConfig(smtpConfigOverride);
   assertSmtpConfig(smtpConfig);
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${smtpConfig.apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      from: smtpConfig.from,
-      to: Array.isArray(payload.to) ? payload.to : [payload.to],
-      subject: payload.subject,
-      html: payload.html || payload.text || "",
-      text: payload.text || ""
-    })
-  });
+  const requestBody = {
+    from: smtpConfig.from,
+    to: Array.isArray(payload.to) ? payload.to : [payload.to],
+    subject: payload.subject,
+    html: payload.html || payload.text || "",
+    text: payload.text || ""
+  };
 
-  let parsed;
+  let response;
   try {
-    parsed = await response.json();
-  } catch (_error) {
-    parsed = null;
+    response = await postToResend(
+      "https://api.resend.com/emails",
+      {
+        Authorization: `Bearer ${smtpConfig.apiKey}`
+      },
+      requestBody
+    );
+  } catch (error) {
+    throw new ApiError(502, "Failed to send email via Resend", {
+      detail: error.message || String(error)
+    });
   }
 
-  if (!response.ok) {
-    const detail = parsed?.error?.message || parsed?.message || "Resend API request failed";
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    const detail = response.parsed?.error?.message || response.parsed?.message || response.body || "Resend API request failed";
     throw new ApiError(502, "Failed to send email via Resend", {
-      status: response.status,
+      status: response.statusCode,
       detail
     });
   }
 
-  return { ok: true, id: parsed?.id || parsed?.message_id || null };
+  return { ok: true, id: response.parsed?.id || response.parsed?.message_id || null };
 }
 async function sendMail({ to, subject, text, html, smtpConfig = null }) {
   const smtpConfigOverride = smtpConfig;
