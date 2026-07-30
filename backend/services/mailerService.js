@@ -27,7 +27,8 @@ function isPlaceholderValue(value) {
 }
 
 function getMailProvider() {
-  return String(process.env.MAIL_PROVIDER || "node").trim().toLowerCase();
+  // Default to 'resend' so the application uses Resend as the primary provider
+  return String(process.env.MAIL_PROVIDER || "resend").trim().toLowerCase();
 }
 
 function getEnvSmtpConfig() {
