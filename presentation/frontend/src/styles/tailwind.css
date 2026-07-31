@@ -1,0 +1,768 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --glass-bg: linear-gradient(160deg, rgba(207, 207, 207, 0.92), rgba(207, 207, 207, 0.8));
+  --glass-border: rgba(127, 73, 180, 0.4);
+  --text-soft: #141414;
+  --student-bg-1: #CFCFCF;
+  --student-bg-2: #CFCFCF;
+  --student-bg-3: #CFCFCF;
+  --student-surface: #CFCFCF;
+  --student-card: #CFCFCF;
+  --student-border: #7F49B4;
+  --student-soft: #141414;
+  --student-text: #141414;
+  --student-accent: #7F49B4;
+  --admin-bg: #CFCFCF;
+  --admin-surface: #CFCFCF;
+  --admin-card: #CFCFCF;
+  --admin-card-2: #CFCFCF;
+  --admin-border: #7F49B4;
+  --admin-soft: #141414;
+  --admin-text: #141414;
+  --admin-primary: #CFCFCF;
+  --admin-primary-soft: #7F49B4;
+  --admin-lime: #7F49B4;
+  --admin-orange: #7F49B4;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  min-height: 100vh;
+  font-family: "Inter", "Roboto", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(900px 420px at 100% -10%, rgba(127, 73, 180, 0.2), transparent 70%),
+    radial-gradient(760px 360px at 0% 100%, rgba(127, 73, 180, 0.14), transparent 68%),
+    linear-gradient(140deg, #CFCFCF 0%, #CFCFCF 68%, #CFCFCF 100%);
+  background-attachment: fixed;
+  color: #141414;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.background {
+  height: 100vh;
+  width: 100%;
+  background:
+    radial-gradient(900px 420px at 100% -10%, rgba(127, 73, 180, 0.2), transparent 70%),
+    radial-gradient(760px 360px at 0% 100%, rgba(127, 73, 180, 0.14), transparent 68%),
+    linear-gradient(140deg, #CFCFCF 0%, #CFCFCF 68%, #CFCFCF 100%);
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 14px 34px rgba(20, 20, 20, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.text-soft {
+  color: var(--text-soft);
+}
+
+.content-fade-in {
+  animation: content-fade 450ms ease;
+}
+
+.portal-shell {
+  width: 100%;
+  max-width: 1720px;
+  margin: 0 auto;
+}
+
+.portal-content-inner {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes content-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+body.admin-mode {
+  font-family: "Inter", "Roboto", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(920px 420px at 100% -30%, rgba(127, 73, 180, 0.24), transparent 70%),
+    radial-gradient(860px 420px at -10% -10%, rgba(127, 73, 180, 0.16), transparent 66%),
+    linear-gradient(180deg, #CFCFCF 0%, var(--admin-bg) 100%);
+  color: var(--admin-text);
+}
+
+body.student-mode {
+  background:
+    radial-gradient(800px 380px at 100% 0%, rgba(127, 73, 180, 0.18), transparent 70%),
+    radial-gradient(760px 360px at 0% 100%, rgba(127, 73, 180, 0.1), transparent 68%),
+    linear-gradient(180deg, var(--student-bg-1) 0%, var(--student-bg-2) 55%, var(--student-bg-3) 100%);
+  color: var(--student-text);
+}
+
+body.student-mode.student-dark-mode {
+  background:
+    radial-gradient(900px 460px at 100% 0%, rgba(20, 20, 20, 0.22), transparent 70%),
+    radial-gradient(780px 380px at 0% 100%, rgba(20, 20, 20, 0.18), transparent 68%),
+    linear-gradient(180deg, #141414 0%, #141414 55%, #141414 100%);
+  color: #CFCFCF;
+}
+
+body.student-mode.student-dark-mode .student-content-wrap {
+  background: linear-gradient(180deg, rgba(20, 20, 20, 0.76), rgba(20, 20, 20, 0.88));
+  border-color: rgba(20, 20, 20, 0.7);
+}
+
+body.student-mode.student-dark-mode .student-shell .glass-card {
+  background: #141414;
+  border-color: #141414;
+  box-shadow: 0 14px 30px rgba(20, 20, 20, 0.42);
+}
+
+body.student-mode.student-dark-mode .student-shell .text-soft {
+  color: #CFCFCF;
+}
+
+body.student-mode.student-dark-mode .student-shell .glass-card .text-white {
+  color: #CFCFCF;
+}
+
+body.student-mode.student-dark-mode .student-shell .glass-card button.text-white,
+body.student-mode.student-dark-mode .student-shell .glass-card a.text-white {
+  color: #CFCFCF;
+}
+
+body.student-mode.student-dark-mode .student-shell .glass-card[class*="bg-white/5"],
+body.student-mode.student-dark-mode .student-shell .glass-card [class*="bg-white/5"],
+body.student-mode.student-dark-mode .student-shell .glass-card[class*="bg-white/10"],
+body.student-mode.student-dark-mode .student-shell .glass-card [class*="bg-white/10"],
+body.student-mode.student-dark-mode .student-shell .glass-card[class*="bg-white/15"],
+body.student-mode.student-dark-mode .student-shell .glass-card [class*="bg-white/15"] {
+  background-color: #141414 !important;
+}
+
+body.student-mode.student-dark-mode .student-shell .glass-card[class*="border-white/10"],
+body.student-mode.student-dark-mode .student-shell .glass-card [class*="border-white/10"],
+body.student-mode.student-dark-mode .student-shell .glass-card[class*="border-white/20"],
+body.student-mode.student-dark-mode .student-shell .glass-card [class*="border-white/20"] {
+  border-color: #141414 !important;
+}
+
+body.student-mode.student-dark-mode .student-shell .bg-gradient-to-r.from-violetBrand-500.to-brand-500 {
+  background-image: linear-gradient(90deg, #7F49B4, #7F49B4);
+}
+
+body.student-mode.student-dark-mode .student-topbar {
+  border-color: #141414;
+  background: #141414;
+}
+
+body.student-mode.student-dark-mode .student-mobile-nav {
+  border-color: #141414;
+  background: #141414;
+  box-shadow: 0 10px 24px rgba(20, 20, 20, 0.5);
+}
+
+body.student-mode.student-dark-mode .student-profile-page .student-profile-card {
+  border-color: #141414;
+  background: #141414;
+  box-shadow: 0 12px 28px rgba(20, 20, 20, 0.45);
+}
+
+body.student-mode.student-dark-mode .student-profile-page .student-profile-panel {
+  border-color: #141414;
+  background: #141414;
+}
+
+body.student-mode.student-dark-mode .student-profile-page .student-profile-stat {
+  border-color: #141414;
+  background: #141414;
+}
+
+body.student-mode.student-dark-mode .student-profile-page .student-profile-tip {
+  border-color: #141414;
+  background: #141414;
+  color: #CFCFCF;
+}
+
+body.student-mode.student-dark-mode .student-profile-page .student-profile-alert-success {
+  border-color: rgba(127, 73, 180, 0.4);
+  background: rgba(20, 20, 20, 0.35);
+  color: #CFCFCF;
+}
+
+body.student-mode.student-dark-mode .student-profile-page .student-profile-alert-error {
+  border-color: rgba(207, 207, 207, 0.5);
+  background: rgba(20, 20, 20, 0.35);
+  color: #CFCFCF;
+}
+
+body.student-mode.student-dark-mode .student-profile-page input,
+body.student-mode.student-dark-mode .student-profile-page textarea,
+body.student-mode.student-dark-mode .student-profile-page select {
+  border-color: #141414 !important;
+  background: #141414 !important;
+  color: #CFCFCF !important;
+}
+
+body.student-mode.student-dark-mode .student-profile-page input::placeholder,
+body.student-mode.student-dark-mode .student-profile-page textarea::placeholder {
+  color: #CFCFCF !important;
+}
+
+body.student-mode.student-dark-mode .student-profile-page [class*="text-[#"] {
+  color: #CFCFCF !important;
+}
+
+body.student-mode.student-dark-mode .student-profile-page .student-profile-accent-card {
+  border-color: #141414;
+  background: linear-gradient(140deg, #141414 0%, #141414 55%, #141414 100%);
+}
+
+.student-shell {
+  max-width: 1540px;
+  margin: 0 auto;
+  padding: 1rem;
+  border-radius: 2rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+.student-content-wrap {
+  padding: 0.4rem 0.35rem 6.5rem 0.35rem;
+  border-radius: 1.6rem;
+  background: linear-gradient(180deg, rgba(20, 20, 20, 0.96), rgba(20, 20, 20, 0.9));
+  border: none;
+}
+
+.student-main {
+  padding-bottom: 0.65rem;
+}
+
+@media (min-width: 1024px) {
+  .student-content-wrap {
+    padding: 0.5rem 1.15rem 1rem 0.3rem;
+  }
+}
+
+.student-shell .glass-card {
+  background: var(--student-card);
+  border: 1px solid var(--student-border);
+  box-shadow: 0 14px 30px rgba(20, 20, 20, 0.35);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.student-shell .text-soft {
+  color: var(--student-soft);
+}
+
+.student-shell .glass-card .text-white {
+  color: var(--student-text);
+}
+
+.student-shell .glass-card button.text-white,
+.student-shell .glass-card a.text-white {
+  color: #CFCFCF;
+}
+
+.student-shell .glass-card[class*="bg-gradient-to-br"] {
+  background: var(--student-card) !important;
+}
+
+.student-shell .glass-card[class*="bg-white/5"],
+.student-shell .glass-card [class*="bg-white/5"],
+.student-shell .glass-card[class*="bg-white/10"],
+.student-shell .glass-card [class*="bg-white/10"],
+.student-shell .glass-card[class*="bg-white/15"],
+.student-shell .glass-card [class*="bg-white/15"] {
+  background-color: #141414 !important;
+}
+
+.student-shell .glass-card[class*="border-white/10"],
+.student-shell .glass-card [class*="border-white/10"],
+.student-shell .glass-card[class*="border-white/20"],
+.student-shell .glass-card [class*="border-white/20"] {
+  border-color: var(--student-border) !important;
+}
+
+.student-shell .glass-card [class*="text-blue-"] {
+  color: var(--student-soft) !important;
+}
+
+.student-shell .glass-card [class*="text-brand-300"] {
+  color: #CFCFCF !important;
+}
+
+.student-shell .bg-gradient-to-r.from-violetBrand-500.to-brand-500 {
+  background-image: linear-gradient(90deg, #7F49B4, var(--student-accent));
+}
+
+.admin-shell {
+  max-width: 1540px;
+  margin: 0 auto;
+  padding: 1rem;
+  border-radius: 2rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+.admin-content-wrap {
+  margin-left: 0;
+  padding: 0.8rem 0.35rem 6.5rem 0.35rem;
+  border-radius: 1.6rem;
+  background: transparent;
+  border: none;
+}
+
+.admin-sidebar-wrap {
+  padding:0.40rem 0 1rem 0.35rem;
+  border-radius: 1.6rem;
+  background: linear-gradient(180deg, rgba(20, 20, 20, 0.9), rgba(20, 20, 20, 0.78));
+  border: 1px solid rgba(127, 73, 180, 0.55);
+}
+
+.admin-main {
+  padding-bottom: 0.65rem;
+}
+
+@media (min-width: 1024px) {
+  .admin-content-wrap {
+    margin-left: 0.3rem;
+    padding: 0.5rem 1.15rem 1rem 0.3rem;
+  }
+
+  .admin-sidebar-wrap {
+    padding: 0.5rem 0 1rem 0.3rem;
+  }
+}
+
+.admin-topbar {
+  background: linear-gradient(180deg, #141414, #141414);
+  border-color: var(--admin-border);
+  box-shadow: 0 10px 24px rgba(20, 20, 20, 0.4);
+}
+
+.admin-sidebar {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.admin-mobile-nav {
+  background: rgba(20, 20, 20, 0.96);
+  border: 1px solid var(--admin-border);
+}
+
+.admin-main .glass-card {
+  background: linear-gradient(155deg, var(--admin-card-2) 0%, var(--admin-card) 100%);
+  border: 1px solid var(--admin-border);
+  box-shadow: 0 14px 30px rgba(20, 20, 20, 0.4);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.admin-shell .text-soft {
+  color: var(--admin-soft);
+}
+
+.admin-shell .admin-heading {
+  font-family: "Inter", "Roboto", "Segoe UI", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.admin-main .admin-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--admin-border);
+  background: #7F49B4;
+  color: var(--admin-text);
+  padding: 0.52rem 0.95rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: all 160ms ease;
+}
+
+.admin-main .admin-pill:hover {
+  border-color: #7F49B4;
+  background: #7F49B4;
+}
+
+.admin-main .admin-pill.active {
+  border-color: rgba(127, 73, 180, 0.34);
+  background: rgba(127, 73, 180, 0.12);
+}
+
+.admin-shell .admin-avatar-ring {
+  box-shadow: 0 0 0 1px rgba(127, 73, 180, 0.4), 0 0 0 4px rgba(127, 73, 180, 0.14);
+}
+
+.admin-shell input,
+.admin-shell select,
+.admin-shell textarea {
+  background-color: #141414;
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+
+.admin-shell input:focus,
+.admin-shell select:focus,
+.admin-shell textarea:focus {
+  border-color: rgba(127, 73, 180, 0.45);
+  box-shadow: 0 0 0 2px rgba(127, 73, 180, 0.14);
+}
+
+.admin-shell .bg-gradient-to-r.from-violetBrand-500.to-brand-500 {
+  background-image: linear-gradient(90deg, var(--admin-lime), var(--admin-orange));
+  color: #CFCFCF;
+}
+
+.admin-shell .bg-gradient-to-r.from-violetBrand-500.to-brand-500:hover {
+  filter: brightness(1.06);
+}
+
+.admin-main .admin-panel-outline {
+  border: 1px solid #d1d5db;
+  background: #f8fafc;
+}
+
+.admin-main .text-soft {
+  color: var(--admin-soft);
+}
+
+.admin-main .text-white {
+  color: var(--admin-text);
+}
+
+.admin-main button.text-white,
+.admin-main a.text-white {
+  color: #CFCFCF;
+}
+
+.admin-main button[class*="bg-white/"],
+.admin-main a[class*="bg-white/"] {
+  background: var(--admin-primary-soft) !important;
+  border-color: #7F49B4 !important;
+  color: var(--admin-primary) !important;
+}
+
+.admin-main button[class*="bg-white/"]:hover,
+.admin-main a[class*="bg-white/"]:hover {
+  background: #7F49B4 !important;
+}
+
+.admin-main input::placeholder,
+.admin-main textarea::placeholder {
+  color: #CFCFCF;
+}
+
+.admin-sidebar .text-soft {
+  color: #CFCFCF;
+}
+
+[class*="bg-[#CFCFCF]"],
+[class*="from-[#CFCFCF]"],
+[class*="to-[#CFCFCF]"],
+[class*="via-[#CFCFCF]"] {
+  background-color: #141414 !important;
+}
+
+[class*="from-[#CFCFCF]"] {
+  --tw-gradient-from: #141414 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(20, 20, 20, 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+[class*="via-[#CFCFCF]"] {
+  --tw-gradient-stops: var(--tw-gradient-from), #141414 var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
+}
+
+[class*="to-[#CFCFCF]"] {
+  --tw-gradient-to: #141414 var(--tw-gradient-to-position) !important;
+}
+
+[class*="text-[#141414]"] {
+  color: #CFCFCF !important;
+}
+
+[class*="border-[#CFCFCF]"] {
+  border-color: #7F49B4 !important;
+}
+
+[class*="bg-white/"] {
+  background-color: rgba(20, 20, 20, 0.92) !important;
+}
+
+[class*="border-white/"] {
+  border-color: rgba(127, 73, 180, 0.55) !important;
+}
+
+button[class*="bg-white/"],
+a[class*="bg-white/"] {
+  background: #7F49B4 !important;
+  color: #CFCFCF !important;
+  border-color: #7F49B4 !important;
+}
+
+/* Global dark override:
+   - All page backgrounds dark
+   - All text light */
+body,
+.background,
+body.admin-mode,
+body.student-mode,
+body.student-mode.student-dark-mode {
+  background: #111111 !important;
+  background-image: none !important;
+  color: #f5f5f5 !important;
+}
+
+.glass-card,
+.admin-main .glass-card,
+.student-shell .glass-card,
+.admin-topbar,
+.admin-sidebar-wrap,
+.student-content-wrap,
+.admin-mobile-nav,
+.student-mobile-nav,
+.admin-shell,
+.student-shell {
+  background: #1a1a1a !important;
+  background-image: none !important;
+  color: #f5f5f5 !important;
+  border-color: #3a3a3a !important;
+  box-shadow: none !important;
+}
+
+.text-soft,
+.text-white,
+[class*="text-soft"],
+[class*="text-white"],
+[class*="text-[#141414]"],
+[class*="text-[#CFCFCF]"],
+[class*="text-slate-"],
+[class*="text-brand-"],
+[class*="text-blue-"] {
+  color: #f5f5f5 !important;
+}
+
+[class*="bg-[#141414]"],
+[class*="bg-[#CFCFCF]"],
+[class*="from-[#141414]"],
+[class*="via-[#141414]"],
+[class*="to-[#141414]"],
+[class*="from-[#CFCFCF]"],
+[class*="via-[#CFCFCF]"],
+[class*="to-[#CFCFCF]"],
+[class*="bg-white/"],
+[class*="from-violetBrand-"],
+[class*="to-brand-"],
+[class*="from-brand-"],
+[class*="to-violetBrand-"] {
+  background: #1a1a1a !important;
+  background-image: none !important;
+}
+
+[class*="border-white/"],
+[class*="border-[#7F49B4]"],
+[class*="border-[#CFCFCF]"] {
+  border-color: #3a3a3a !important;
+}
+
+/* Admin light override (white + black combination) */
+body.admin-mode,
+body.admin-mode .background {
+  background: #f3f4f6 !important;
+  background-image: none !important;
+  color: #111111 !important;
+}
+
+body.admin-mode .admin-shell,
+body.admin-mode .admin-content-wrap,
+body.admin-mode .admin-sidebar-wrap {
+  background: transparent !important;
+  background-image: none !important;
+  color: #111111 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+body.admin-mode .admin-topbar,
+body.admin-mode .admin-mobile-nav,
+body.admin-mode .glass-card,
+body.admin-mode .admin-main .glass-card {
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #111111 !important;
+  border-color: #d1d5db !important;
+  box-shadow: none !important;
+}
+
+body.admin-mode .text-soft,
+body.admin-mode .text-white,
+body.admin-mode [class*="text-soft"],
+body.admin-mode [class*="text-white"],
+body.admin-mode [class*="text-[#141414]"],
+body.admin-mode [class*="text-[#CFCFCF]"],
+body.admin-mode [class*="text-[#7F49B4]"],
+body.admin-mode [class*="text-slate-"],
+body.admin-mode [class*="text-brand-"],
+body.admin-mode [class*="text-blue-"] {
+  color: #111111 !important;
+}
+
+body.admin-mode [class*="border-white/"],
+body.admin-mode [class*="border-[#CFCFCF]"],
+body.admin-mode [class*="border-[#7F49B4]"] {
+  border-color: #d1d5db !important;
+}
+
+body.admin-mode [class*="bg-[#141414]"],
+body.admin-mode [class*="bg-[#CFCFCF]"],
+body.admin-mode [class*="bg-[#7F49B4]"],
+body.admin-mode [class*="bg-white/"],
+body.admin-mode [class*="from-[#141414]"],
+body.admin-mode [class*="via-[#141414]"],
+body.admin-mode [class*="to-[#141414]"],
+body.admin-mode [class*="from-[#CFCFCF]"],
+body.admin-mode [class*="via-[#CFCFCF]"],
+body.admin-mode [class*="to-[#CFCFCF]"],
+body.admin-mode [class*="from-[#7F49B4]"],
+body.admin-mode [class*="via-[#7F49B4]"],
+body.admin-mode [class*="to-[#7F49B4]"] {
+  background: #ffffff !important;
+  background-image: none !important;
+}
+
+body.admin-mode input,
+body.admin-mode select,
+body.admin-mode textarea {
+  background: #ffffff !important;
+  color: #111111 !important;
+  border-color: #d1d5db !important;
+}
+
+body.admin-mode .admin-main .admin-pill,
+body.admin-mode button[class*="bg-white/"],
+body.admin-mode a[class*="bg-white/"],
+body.admin-mode .admin-shell .bg-gradient-to-r.from-violetBrand-500.to-brand-500 {
+  background: #111111 !important;
+  color: #ffffff !important;
+  border-color: #111111 !important;
+}
+
+body.admin-mode .admin-main .admin-pill:hover,
+body.admin-mode button[class*="bg-white/"]:hover,
+body.admin-mode a[class*="bg-white/"]:hover,
+body.admin-mode .admin-shell .bg-gradient-to-r.from-violetBrand-500.to-brand-500:hover {
+  background: #000000 !important;
+}
+
+/* Faculty + Student day mode light override (white + black) */
+body:not(.admin-mode):not(.student-dark-mode),
+body:not(.admin-mode):not(.student-dark-mode) .background {
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #111111 !important;
+}
+
+body:not(.admin-mode):not(.student-dark-mode) .portal-shell,
+body:not(.admin-mode):not(.student-dark-mode) .student-shell,
+body:not(.admin-mode):not(.student-dark-mode) .student-content-wrap,
+body:not(.admin-mode):not(.student-dark-mode) .student-topbar,
+body:not(.admin-mode):not(.student-dark-mode) .student-mobile-nav,
+body:not(.admin-mode):not(.student-dark-mode) .glass-card,
+body:not(.admin-mode):not(.student-dark-mode) .student-profile-page .student-profile-card,
+body:not(.admin-mode):not(.student-dark-mode) .student-profile-page .student-profile-panel,
+body:not(.admin-mode):not(.student-dark-mode) .student-profile-page .student-profile-stat,
+body:not(.admin-mode):not(.student-dark-mode) .student-profile-page .student-profile-tip,
+body:not(.admin-mode):not(.student-dark-mode) .student-profile-page .student-profile-accent-card,
+body:not(.admin-mode):not(.student-dark-mode) .faculty-profile-page .faculty-profile-card,
+body:not(.admin-mode):not(.student-dark-mode) .faculty-profile-page .faculty-profile-panel,
+body:not(.admin-mode):not(.student-dark-mode) .faculty-profile-page .faculty-profile-stat,
+body:not(.admin-mode):not(.student-dark-mode) .faculty-profile-page .faculty-profile-tip,
+body:not(.admin-mode):not(.student-dark-mode) .faculty-profile-page .faculty-profile-accent-card {
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #111111 !important;
+  border-color: #d1d5db !important;
+  box-shadow: none !important;
+}
+
+body:not(.admin-mode):not(.student-dark-mode) .text-soft,
+body:not(.admin-mode):not(.student-dark-mode) [class*="text-soft"],
+body:not(.admin-mode):not(.student-dark-mode) [class*="text-[#141414]"],
+body:not(.admin-mode):not(.student-dark-mode) [class*="text-[#CFCFCF]"],
+body:not(.admin-mode):not(.student-dark-mode) [class*="text-slate-"] {
+  color: #111111 !important;
+}
+
+body:not(.admin-mode):not(.student-dark-mode) .glass-card .text-white {
+  color: #111111 !important;
+}
+
+body:not(.admin-mode):not(.student-dark-mode) .glass-card button.text-white,
+body:not(.admin-mode):not(.student-dark-mode) .glass-card a.text-white {
+  color: #ffffff !important;
+}
+
+body:not(.admin-mode):not(.student-dark-mode) [class*="bg-[#141414]"],
+body:not(.admin-mode):not(.student-dark-mode) [class*="from-[#141414]"],
+body:not(.admin-mode):not(.student-dark-mode) [class*="via-[#141414]"],
+body:not(.admin-mode):not(.student-dark-mode) [class*="to-[#141414]"],
+body:not(.admin-mode):not(.student-dark-mode) [class*="bg-white/"] {
+  background: #ffffff !important;
+  background-image: none !important;
+}
+
+body:not(.admin-mode):not(.student-dark-mode) [class*="border-white/"],
+body:not(.admin-mode):not(.student-dark-mode) [class*="border-[#CFCFCF]"] {
+  border-color: #d1d5db !important;
+}
+
+body:not(.admin-mode):not(.student-dark-mode) *:not(button):not(a)[class*="text-white"] {
+  color: #111111 !important;
+}
+
+body:not(.admin-mode):not(.student-dark-mode) input,
+body:not(.admin-mode):not(.student-dark-mode) select,
+body:not(.admin-mode):not(.student-dark-mode) textarea {
+  background: #ffffff !important;
+  color: #111111 !important;
+  border-color: #d1d5db !important;
+}
+
+/* Student pages: remove outer wrapper frame */
+body.student-mode .student-shell,
+body.student-mode .student-content-wrap {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+body.student-mode .student-content-wrap {
+  background: transparent !important;
+}

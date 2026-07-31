@@ -1,22 +1,16 @@
-# Local backups (do not commit)
-backups/
-
 # Dependencies
 **/node_modules/
 
-# Build output
-**/dist/
-
 # Local environment and secrets
 **/.env
-**/.env.*
-!**/.env.example
+**/.env.local
+**/.env.aws
 
 # Archives
 *.zip
 
 # Local file storage
-**/backend/uploads/
+backend/uploads/
 
 # OS junk
 .DS_Store

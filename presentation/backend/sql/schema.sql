@@ -1,0 +1,160 @@
+CREATE DATABASE IF NOT EXISTS cmr_smart_portal;
+USE cmr_smart_portal;
+
+CREATE TABLE IF NOT EXISTS departments (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  code VARCHAR(20) NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS classes (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  department_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(150) NOT NULL,
+  year TINYINT UNSIGNED NOT NULL,
+  section VARCHAR(10) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_classes_department
+    FOREIGN KEY (department_id) REFERENCES departments(id)
+    ON DELETE CASCADE,
+  UNIQUE KEY uk_class_identity (department_id, year, section)
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(190) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('ADMIN', 'FACULTY', 'STUDENT', 'SMARTBOARD') NOT NULL,
+  roll_number VARCHAR(30) NULL,
+  branch VARCHAR(100) NULL,
+  year TINYINT UNSIGNED NULL,
+  section VARCHAR(10) NULL,
+  mobile VARCHAR(20) NULL,
+  profile_photo MEDIUMTEXT NULL,
+  class_id BIGINT UNSIGNED NULL,
+  is_verified TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_users_class
+    FOREIGN KEY (class_id) REFERENCES classes(id)
+    ON DELETE SET NULL,
+  INDEX idx_users_role (role)
+);
+
+CREATE TABLE IF NOT EXISTS faculty_classes (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  faculty_id BIGINT UNSIGNED NOT NULL,
+  class_id BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_faculty_classes_faculty
+    FOREIGN KEY (faculty_id) REFERENCES users(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_faculty_classes_class
+    FOREIGN KEY (class_id) REFERENCES classes(id)
+    ON DELETE CASCADE,
+  UNIQUE KEY uk_faculty_class (faculty_id, class_id)
+);
+
+CREATE TABLE IF NOT EXISTS subjects (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  class_id BIGINT UNSIGNED NOT NULL,
+  faculty_id BIGINT UNSIGNED NULL,
+  name VARCHAR(160) NOT NULL,
+  code VARCHAR(30) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_subjects_class
+    FOREIGN KEY (class_id) REFERENCES classes(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_subjects_faculty
+    FOREIGN KEY (faculty_id) REFERENCES users(id)
+    ON DELETE SET NULL,
+  UNIQUE KEY uk_subject_class_code (class_id, code)
+);
+
+CREATE TABLE IF NOT EXISTS uploads (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  uploaded_by BIGINT UNSIGNED NOT NULL,
+  subject_id BIGINT UNSIGNED NOT NULL,
+  s3_key VARCHAR(500) NOT NULL,
+  file_url VARCHAR(1000) NOT NULL,
+  status ENUM('PENDING', 'UPLOADED', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'UPLOADED',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_uploads_user
+    FOREIGN KEY (uploaded_by) REFERENCES users(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_uploads_subject
+    FOREIGN KEY (subject_id) REFERENCES subjects(id)
+    ON DELETE CASCADE,
+  INDEX idx_uploads_subject (subject_id),
+  INDEX idx_uploads_user (uploaded_by)
+);
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at DATETIME NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_refresh_tokens_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE,
+  INDEX idx_refresh_user (user_id),
+  INDEX idx_refresh_expiry (expires_at)
+);
+
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(190) NOT NULL,
+  user_id BIGINT UNSIGNED NULL,
+  otp_hash VARCHAR(255) NOT NULL,
+  purpose ENUM('REGISTRATION', 'SMARTBOARD_LOGIN', 'PASSWORD_RESET') NOT NULL,
+  context_token VARCHAR(120) NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_otp_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE,
+  INDEX idx_otp_lookup (email, purpose, context_token),
+  INDEX idx_otp_expiry (expires_at)
+);
+
+CREATE TABLE IF NOT EXISTS smartboard_sessions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  session_token VARCHAR(120) NOT NULL UNIQUE,
+  smartboard_name VARCHAR(120) NULL,
+  authorized_by BIGINT UNSIGNED NULL,
+  status ENUM('PENDING', 'AUTHORIZED', 'EXPIRED') NOT NULL DEFAULT 'PENDING',
+  expires_at DATETIME NOT NULL,
+  authorized_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_smartboard_authorized_by
+    FOREIGN KEY (authorized_by) REFERENCES users(id)
+    ON DELETE SET NULL,
+  INDEX idx_smartboard_status (status),
+  INDEX idx_smartboard_expiry (expires_at)
+);
+
+CREATE TABLE IF NOT EXISTS smtp_config (
+  id TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
+  host VARCHAR(160) NOT NULL,
+  port INT NOT NULL,
+  username VARCHAR(190) NOT NULL,
+  sender_name VARCHAR(120) NOT NULL,
+  secure TINYINT(1) NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS theme_config (
+  id TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
+  primary_gradient_from VARCHAR(20) NOT NULL DEFAULT '#5b21b6',
+  primary_gradient_to VARCHAR(20) NOT NULL DEFAULT '#2563eb',
+  card_blur_px INT NOT NULL DEFAULT 14,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
