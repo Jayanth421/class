@@ -35,7 +35,6 @@ function loadEnvFiles() {
 
 loadEnvFiles();
 
-const app = require("./app");
 const { connectMongo } = require("./config/mongo");
 
 const PORT = Number(process.env.PORT || 5000);
@@ -46,6 +45,9 @@ async function startServer() {
     if (mongoConnection?.source) {
       console.log(`Mongo connected using ${mongoConnection.source} source`);
     }
+    // Require the Express app after DB connection so route modules (and any model imports)
+    // don't run database operations at module-load time before the driver is ready.
+    const app = require("./app");
     app.listen(PORT, () => {
       console.log(`CMR Smart Presentation backend running on port ${PORT}`);
     });

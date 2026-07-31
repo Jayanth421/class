@@ -150,13 +150,7 @@ export default function SmartboardConnectPage() {
               </button>
 
               {/* Toggle illustration button */}
-              <button
-                type="button"
-                onClick={() => setShowHeroImage((v) => !v)}
-                className="w-full mt-2 rounded-full border border-green-500 px-4 py-3 text-sm font-semibold text-green-600 hover:bg-green-50"
-              >
-                {showHeroImage ? "Hide illustration" : "Show illustration"}
-              </button>
+             
 
               <p className="mt-4 text-center text-xs text-slate-500">Or use QR login from the Smartboard Connect screen</p>
             </form>

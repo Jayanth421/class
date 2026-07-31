@@ -1389,6 +1389,7 @@ const getSmartboardLibrary = asyncHandler(async (req, res) => {
       name: item.name || null,
       code: item.code || null,
       classId,
+      facultyId: item.facultyId?._id ? String(item.facultyId._id) : null,
       className: classDoc?.name || null,
       year: classDoc?.year || null,
       section: classDoc?.section || null,

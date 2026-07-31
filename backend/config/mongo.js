@@ -129,7 +129,8 @@ async function ensureUserCollectionIndexes() {
 async function connectMongo() {
   await ensureNodeDns();
   const mongoCandidates = getMongoCandidates();
-  const timeoutMs = Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 10000);
+  // Increase default server selection timeout to 30s to reduce false positives during network/DNS issues.
+  const timeoutMs = Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 30000);
 
   if (mongoCandidates.length === 0) {
     throw new Error("MONGO_URI (or MONGODB_URI) is required");
@@ -139,10 +140,17 @@ async function connectMongo() {
 
   for (const candidate of mongoCandidates) {
     try {
+      console.log(`Attempting MongoDB connect to ${candidate.label} [${maskMongoUri(candidate.uri)}] with serverSelectionTimeoutMS=${timeoutMs}ms`);
       await mongoose.connect(candidate.uri, {
-        serverSelectionTimeoutMS: timeoutMs
+        serverSelectionTimeoutMS: timeoutMs,
+        // Optional connect timeout (fallback to same as server selection timeout)
+        connectTimeoutMS: Number(process.env.MONGO_CONNECT_TIMEOUT_MS || timeoutMs),
+        // Modern parser/topology flags (harmless on recent mongoose versions)
+        useNewUrlParser: true,
+        useUnifiedTopology: true
       });
       await ensureUserCollectionIndexes();
+      console.log(`MongoDB connected to ${candidate.label} [${maskMongoUri(candidate.uri)}]`);
       return {
         source: candidate.label,
         uri: candidate.uri

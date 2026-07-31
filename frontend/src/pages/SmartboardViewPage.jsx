@@ -387,7 +387,7 @@ export default function SmartboardViewPage() {
              
             </div>
 
-            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="mt-6 grid grid-cols-1 gap-6">
               {selectedClassPresentations.map((ppt) => (
                 <div key={ppt.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
                   <div className="relative">
